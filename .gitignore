@@ -19,6 +19,15 @@ docs/
 !docs/
 docs/*
 !docs/V2_OUTSIDE_VISUALS_PLAN.md
+# Local reference notes and archived design material
+docs/reference/
+
+# Generated test outputs, captures, and analysis exports
+test-results/
+
+# Standalone visual prototypes and screenshots (not app runtime assets)
+previews/
+previews/*
 .trae/
 .superpowers/
 .remember/
@@ -149,3 +158,5 @@ vite.config.ts.timestamp-*
 
 # Claude worktrees
 .worktrees/
+
+previews/*

@@ -1,8 +1,0 @@
-
---- Translation Key Comparison Report ---
-
-All keys used in code are found in en.js.
-
-All keys used in code are found in zh.js.
-
---- End of Report ---
