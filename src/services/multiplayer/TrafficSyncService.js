@@ -1,5 +1,5 @@
 import eventBus from '../eventBus.js';
-import { createRealtimeChannel, supabase } from '../skylinetragedy/SupabaseClient.js';
+import { createRealtimeChannel, supabase } from '../aviationIntercept/SupabaseClient.js';
 
 function roundNumber(value, digits = 5) {
   const numeric = Number(value);

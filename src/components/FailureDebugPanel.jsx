@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { failureGraphManager } from '../services/skylinetragedy/FailureGraphManager.js';
+import { failureGraphManager } from '../services/aviationIntercept/FailureGraphManager.js';
 
 const FailureDebugPanel = ({ physicsService, onClose }) => {
     const [activeFailures, setActiveFailures] = useState([]);

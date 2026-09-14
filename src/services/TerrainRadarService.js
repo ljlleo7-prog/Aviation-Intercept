@@ -1,5 +1,3 @@
-import { calculateDistance } from '../utils/distanceCalculator.js';
-
 class TerrainRadarService {
     constructor() {
         this.GRID_SIZE = 0.01; // 0.01 degrees resolution (approx 1.1km or 0.6nm)

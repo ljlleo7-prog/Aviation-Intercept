@@ -1,5 +1,5 @@
 import eventBus from '../eventBus.js';
-import { getSupabaseUser, isSupabaseReady, supabase } from '../skylinetragedy/SupabaseClient.js';
+import { getSupabaseUser, isSupabaseReady, supabase } from '../aviationIntercept/SupabaseClient.js';
 
 function normalizeSessionPayload(payload) {
   if (!payload) {

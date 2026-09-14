@@ -16,6 +16,9 @@ pids
 *.pid.lock
 
 docs/
+!docs/
+docs/*
+!docs/V2_OUTSIDE_VISUALS_PLAN.md
 .trae/
 .superpowers/
 .remember/

@@ -2,7 +2,7 @@
 // Simple database for ATC responses based on pilot request types
 // This can be expanded with more complex logic later
 
-import { supabase } from '../services/skylinetragedy/SupabaseClient.js';
+import { supabase } from '../services/aviationIntercept/SupabaseClient.js';
 
 const atcPhraseCacheKey = 'skylinetragedy_atc_phrase_templates_v2';
 const atcPhraseCacheTtlMs = 12 * 60 * 60 * 1000;

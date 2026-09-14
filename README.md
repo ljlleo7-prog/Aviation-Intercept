@@ -1,9 +1,9 @@
-# Ultimate Crash Simulator
+# Aviation Intercept
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Version](https://img.shields.io/badge/Version-0.1.0-blue)
 
-**Ultimate Crash** is a web-based aviation emergency simulator focused on abnormal situations, cockpit workload, and failure management. It combines a custom flight model, interactive cockpit systems, route planning, and narrative-driven scenarios.
+**Aviation Intercept** is a web-based aviation emergency simulator focused on abnormal situations, cockpit workload, and failure management. It combines a custom flight model, interactive cockpit systems, route planning, and narrative-driven scenarios.
 
 This project is playable now, but it is **not** a fully study-level airliner simulation. Some aircraft systems and overhead workflows are modeled in depth, while others are currently simplified, shared across aircraft, or marked inoperative.
 
@@ -29,8 +29,8 @@ This project is playable now, but it is **not** a fully study-level airliner sim
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-repo/Ultimate-Crash-0.1.git
-   cd Ultimate-Crash-0.1
+   git clone https://github.com/your-repo/Aviation-Intercept.git
+   cd Aviation-Intercept
    ```
 
 2. **Install dependencies**
@@ -57,7 +57,7 @@ By default, the Vite dev server is expected to be available at `http://localhost
 
 ### 1. What this simulator is
 
-Ultimate Crash is built around emergency and abnormal-operations gameplay rather than routine gate-to-gate airline simulation. You will spend most of your time managing:
+Aviation Intercept is built around emergency and abnormal-operations gameplay rather than routine gate-to-gate airline simulation. You will spend most of your time managing:
 
 - route and dispatch setup
 - aircraft handling during abnormal situations

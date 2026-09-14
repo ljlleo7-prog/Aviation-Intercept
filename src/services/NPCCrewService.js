@@ -1,5 +1,5 @@
 
-import { supabase } from './skylinetragedy/SupabaseClient.js';
+import { supabase } from './aviationIntercept/SupabaseClient.js';
 import eventBus from './eventBus.js';
 import fallbackResponses from '../data/npc_fallback_responses.json';
 

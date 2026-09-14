@@ -1,4 +1,4 @@
-import { supabase } from './skylinetragedy/SupabaseClient.js';
+import { supabase } from './aviationIntercept/SupabaseClient.js';
 
 const ok = (dataKey, value) => ({ status: 'ok', [dataKey]: value });
 const unavailable = (message) => ({ status: 'unavailable', message });

@@ -3,7 +3,7 @@ import { buildProviderNegativeCacheKey, getCachedProviderNegative, setCachedProv
 
 const getSupabaseClient = async () => {
   try {
-    const module = await import('../skylinetragedy/SupabaseClient.js');
+    const module = await import('../aviationIntercept/SupabaseClient.js');
     return module?.supabase || module?.default || null;
   } catch (_error) {
     return null;
@@ -71,4 +71,3 @@ export const callGuardedRouteProvider = async ({ provider, payload = {}, mockRes
     return failed;
   }
 };
-

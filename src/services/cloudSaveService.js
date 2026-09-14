@@ -1,4 +1,4 @@
-import { getSupabaseUser, supabase } from './skylinetragedy/SupabaseClient.js';
+import { getSupabaseUser, supabase } from './aviationIntercept/SupabaseClient.js';
 
 const TABLE_NAME = 'flight_saves';
 

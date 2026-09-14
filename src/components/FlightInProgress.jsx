@@ -27,7 +27,7 @@ import { checkStartupRequirements, StartupPhases } from '../services/StartupChec
 import { Checklists } from '../services/ChecklistData.js';
 import { evaluateNormalChecklist, resolveAbnormalChecklist } from '../services/autoflight/NPCChecklistService.js';
 import { buildNPCSystemSnapshot, formatNPCSystemReport } from '../services/autoflight/NPCReportingService.js';
-import { skylinetragedyService } from '../services/skylinetragedy/SkylinetragedyService.js';
+import { aviationInterceptService } from '../services/aviationIntercept/AviationInterceptService.js';
 import { npcCrewService } from '../services/NPCCrewService';
 import CrewPanel from './CrewPanel';
 import TutorialOverlay from './TutorialOverlay';
@@ -1180,7 +1180,7 @@ const FlightInProgress = ({
   // Initialize SkylineTragedy Service
   useEffect(() => {
     if (!offlineMode) {
-      skylinetragedyService.initialize();
+      aviationInterceptService.initialize();
     }
     npcCrewService.initialize(difficulty);
 
@@ -1237,7 +1237,7 @@ const FlightInProgress = ({
         steppedDt += FIXED_STEP;
 
         if (physicsServiceRef.current) {
-          skylinetragedyService.update(FIXED_STEP, physicsServiceRef.current);
+          aviationInterceptService.update(FIXED_STEP, physicsServiceRef.current);
         }
       }
 

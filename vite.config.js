@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const spaFallback = () => ({
-  name: 'ultimate-crash-spa-fallback',
+  name: 'aviation-intercept-spa-fallback',
   configureServer(server) {
     server.middlewares.use((req, _res, next) => {
       const pathname = req.url?.split('?')[0] || '/'

@@ -1,0 +1,55 @@
+/* Short, flat-edged transport-aircraft windscreen study. */
+.roof {
+  top: 0;
+  height: 21%;
+  border-bottom: 7px solid #0b0e0e;
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 73% 91%, 27% 91%, 0 72%);
+}
+
+.pillar {
+  top: 15%;
+  bottom: 31%;
+  width: 10%;
+  border-radius: 0;
+}
+
+.pillar.left {
+  left: -2%;
+  transform: none;
+  clip-path: polygon(0 0, 68% 0, 100% 100%, 0 100%);
+}
+
+.pillar.right {
+  right: -2%;
+  transform: none;
+  clip-path: polygon(32% 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.center-post {
+  top: 17%;
+  width: 2.8%;
+  height: 52%;
+  clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%);
+}
+
+.glareshield {
+  height: 34%;
+  border-top: 7px solid #060909;
+  clip-path: polygon(0 18%, 12% 9%, 35% 6%, 39% 0, 61% 0, 65% 6%, 88% 9%, 100% 18%, 100% 100%, 0 100%);
+}
+
+@media (max-width: 700px) {
+  .roof {
+    height: 18%;
+  }
+
+  .pillar {
+    top: 12%;
+    bottom: 30%;
+  }
+
+  .glareshield {
+    height: 32%;
+  }
+}

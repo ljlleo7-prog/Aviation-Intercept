@@ -1,4 +1,4 @@
-import { supabase } from '../skylinetragedy/SupabaseClient.js';
+import { supabase } from '../aviationIntercept/SupabaseClient.js';
 import { PROVIDER_STATUS, ROUTE_SOURCES } from './routeTypes.js';
 
 const DEFAULT_AIP_CYCLE = '2605';

@@ -1,4 +1,4 @@
-// Distance Calculator for Ultimate Crash Simulation
+// Distance Calculator for Aviation Intercept
 // Enhanced with aircraft-specific fuel calculations
 
 import aircraftService from '../services/aircraftService.js';

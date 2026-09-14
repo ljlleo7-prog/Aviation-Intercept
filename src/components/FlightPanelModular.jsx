@@ -25,6 +25,7 @@ import CircuitBreakerPanel from './CircuitBreakerPanel';
 import SensoryFeedback from './SensoryFeedback';
 import SettingsPanel from './SettingsPanel';
 import FMA from './autoflight/FMA.jsx';
+import AircraftMainPanelReplica from './AircraftMainPanelReplica.jsx';
 import { useLanguage } from '../contexts/LanguageContext';
 import './FlightPanel.css';
 
@@ -204,6 +205,9 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
           frame: typeof flightData.frame === 'number' ? flightData.frame : prevState.frame,
           systems: flightData.systems ?? prevState.systems ?? {},
           currentWaypointIndex: flightData.currentWaypointIndex !== undefined ? flightData.currentWaypointIndex : (prevState.currentWaypointIndex || 0),
+          navigationPath: Array.isArray(flightData.navigationPath)
+            ? flightData.navigationPath
+            : (Array.isArray(flightData.navigation?.navigationPath) ? flightData.navigation.navigationPath : prevState.navigationPath || []),
           derived: flightData.derived ?? prevState.derived ?? null,
           environment: flightData.environment ?? prevState.environment ?? {}
         };
@@ -586,7 +590,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
       ),
       
       // Three parallel panels
-      React.createElement('div', { className: `main-panels ${efisFontClass}` },
+      React.createElement(AircraftMainPanelReplica, { aircraftModel, flightState, flightPlan, className: efisFontClass },
         // Flight Pose Panel (Left)
         React.createElement(FlightPosePanel, { flightState, efisFontFamily }),
 

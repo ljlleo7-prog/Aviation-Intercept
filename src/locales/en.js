@@ -623,7 +623,7 @@ const en = {
     }
   },
   initialization: {
-    title: 'Skyline Tragedy - Flight Initialization',
+    title: 'Aviation Intercept - Flight Initialization',
     subtitle: 'Configure your flight parameters and select difficulty level',
     steps: {
       1: '01. OPERATIONAL LEVEL & INTEL',
