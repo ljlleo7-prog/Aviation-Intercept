@@ -1,5 +1,6 @@
 import eventBus, { EventTypes } from './eventBus.js';
-import { getRunwayHeading } from '../utils/routeGenerator';
+import { sceneProgressionEnabled } from '../config/sceneProgression.js';
+import { getRunwayHeading } from '../utils/routeGenerator.js';
 import { getRandomTemplate } from './narrativeTemplates.js';
 import narrativeData from '../data/narrativeDatabase.json';
 import { checkStartupRequirements, StartupPhases } from './StartupChecklist.js';
@@ -161,7 +162,7 @@ const defaultScenario = {
       physics: {
         mode: 'continuous',
         targetAltitude: 35000,
-        targetSpeed: 450 // TAS
+        targetSpeed: 250 // IAS at FL350 (about 450 KTAS in ISA conditions)
       },
       narrative: {
         title: 'Cruising at FL350',
@@ -255,7 +256,7 @@ const defaultScenario = {
   ]
 };
 
-class SceneManager {
+export class SceneManager {
   constructor(scenario = defaultScenario) {
     this.scenario = scenario;
     this.currentIndex = 0;
@@ -339,6 +340,7 @@ class SceneManager {
 
   // Skip the current phase (User Requested)
   skipPhase() {
+    if (!sceneProgressionEnabled) return;
     const phase = this.currentPhase();
     if (phase) {
       console.log(`⏩ Skipping phase: ${phase.name}`);
@@ -386,6 +388,7 @@ class SceneManager {
   }
 
   nextPhase() {
+    if (!sceneProgressionEnabled) return;
     // Mark current phase as completed
     const currentPhase = this.currentPhase();
     if (currentPhase) {
@@ -496,6 +499,7 @@ class SceneManager {
   }
 
   checkPhaseCompletion(dt, payload) {
+    if (!sceneProgressionEnabled) return;
     const phase = this.currentPhase();
     if (!phase) return;
 
@@ -919,6 +923,7 @@ class SceneManager {
   }
 
   physicsActive() {
+    if (!sceneProgressionEnabled) return true;
     const phase = this.currentPhase();
     if (!phase || !phase.physics) {
       return false;
@@ -959,6 +964,7 @@ class SceneManager {
 
   // Set initial physics conditions for the current phase
   setPhaseInitialConditions(phase, previousPhase = null) {
+    if (!sceneProgressionEnabled) return;
     if (!phase || !phase.physics) {
       return;
     }
@@ -1055,7 +1061,7 @@ class SceneManager {
       phaseType: phase.type,
       initialConditions,
       targetAltitude: physics.targetAltitude ? physics.targetAltitude * 0.3048 : undefined,
-      targetSpeed: physics.targetSpeed ? physics.targetSpeed * 0.514444 : undefined,
+      targetSpeed: physics.targetSpeed, // AP speed targets are IAS in knots
       targetHeading: physics.targetHeading ? physics.targetHeading * Math.PI / 180 : undefined // Add target heading
     });
   }

@@ -122,6 +122,8 @@ class RealisticAutopilotService {
 
         this.engaged = false;
         this.mode = 'HDG'; // Default mode
+        this.vnavArmed = false;
+        this.autothrottleArmed = true;
         this.runwayGeometry = null;
         this.nav1Frequency = 0; // Currently tuned NAV1 Frequency
         this.prevTargetRoll = 0;
@@ -178,7 +180,10 @@ class RealisticAutopilotService {
             engaged: this.engaged,
             autopilotMode: this.mode,
             autopilotDebug: this.debugState,
-            targets: this.targets
+            targets: this.targets,
+            vnavArmed: this.vnavArmed,
+            vnavPathAvailable: false,
+            autothrottleArmed: this.autothrottleArmed
         });
     }
 
@@ -189,6 +194,15 @@ class RealisticAutopilotService {
     setNavFrequency(freq) {
         this.nav1Frequency = freq;
         this.debugState.nav1Frequency = freq;
+    }
+
+    setVNAVArmed(armed) {
+        this.vnavArmed = Boolean(armed);
+        if (!this.vnavArmed) this.lnavVS = null;
+    }
+
+    setAutothrottleArmed(armed) {
+        this.autothrottleArmed = Boolean(armed);
     }
     
     setNavigationPlan(plan) {
@@ -872,10 +886,7 @@ class RealisticAutopilotService {
             };
 
             // Set Altitude Target from Fix if available
-            if (fix.altitude && typeof fix.altitude === 'number') {
-                this.targets.altitude = fix.altitude;
-                this.lnavVS = this.altitudePID.update(fix.altitude, altitude, dt);
-            }
+            // Vertical path selection is controlled independently by VNAV.
         }
         
         // --- ILS Logic ---
@@ -901,7 +912,15 @@ class RealisticAutopilotService {
         if (ilsDebug.message) this.debugState.ilsMessage = ilsDebug.message;
 
         // Altitude Hold Logic (When not on Glideslope AND not in LNAV VNAV)
-        const lnavHandlingVS = (this.mode === 'LNAV' && this.navPlan && this.navPlan.fix && typeof this.navPlan.fix.altitude === 'number');
+        const vnavFixAltitude = this.vnavArmed && this.navPlan?.fix && Number.isFinite(this.navPlan.fix.altitude)
+            ? this.navPlan.fix.altitude : null;
+        if (vnavFixAltitude !== null) {
+            this.targets.altitude = vnavFixAltitude;
+            this.lnavVS = this.altitudePID.update(vnavFixAltitude, altitude, dt);
+        } else {
+            this.lnavVS = null;
+        }
+        const lnavHandlingVS = vnavFixAltitude !== null;
         const altitudeControlActive = !ilsDebug.gsCaptured && !lnavHandlingVS && this.targets.altitude > 0;
 
         // ILS/LNAV already computed their VS; pick up the right source
@@ -1047,7 +1066,7 @@ class RealisticAutopilotService {
         // 3. Directional Control (Heading/LNAV/ILS -> Roll -> Aileron)
         let targetRoll = 0;
         let headingError = 0;
-        if (this.mode === 'HDG' || this.mode === 'LNAV' || this.mode === 'ILS') {
+        if (this.mode === 'HDG' || this.mode === 'CWS' || this.mode === 'LNAV' || this.mode === 'ILS') {
             // Calculate heading error with wrap-around
             headingError = targetHeading - fHeading;
             if (headingError > 180) headingError -= 360;
@@ -1176,7 +1195,10 @@ class RealisticAutopilotService {
             engaged: this.engaged,
             autopilotMode: this.mode,
             autopilotDebug: this.debugState,
-            targets: this.targets
+            targets: this.targets,
+            vnavArmed: this.vnavArmed,
+            vnavPathAvailable: Number.isFinite(this.navPlan?.fix?.altitude),
+            autothrottleArmed: this.autothrottleArmed
         });
 
         return {

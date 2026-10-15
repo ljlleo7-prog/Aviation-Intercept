@@ -5,7 +5,7 @@ import RealisticFlightPhysicsService from '../src/services/RealisticFlightPhysic
 import { createCanonicalFailureGraph } from '../src/services/failures/CanonicalFailureGraph.js';
 import { validateFailureGraphArtifact } from '../src/services/failures/FailureGraphArtifact.js';
 import FailureGraphExecutor from '../src/services/failures/FailureGraphExecutor.js';
-import { failureGraphManager } from '../src/services/skylinetragedy/FailureGraphManager.js';
+import { failureGraphManager } from '../src/services/aviationIntercept/FailureGraphManager.js';
 
 const require = createRequire(import.meta.url);
 const aircraftDatabase = require('../src/data/aircraftDatabase.json');

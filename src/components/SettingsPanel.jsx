@@ -17,7 +17,7 @@ const panelStyle = {
   color: '#f3f4f6'
 };
 
-const SettingsPanel = ({ settings, settingsError, autoSaveStatus, onUpdateSettings, onClose }) => {
+const SettingsPanel = ({ settings, settingsError, autoSaveStatus, onUpdateSettings, visualQuality = 'balanced', onUpdateVisualQuality, onClose }) => {
   const lastSavedText = autoSaveStatus?.lastSavedAt
     ? new Date(autoSaveStatus.lastSavedAt).toLocaleTimeString()
     : 'Not saved yet';
@@ -30,6 +30,22 @@ const SettingsPanel = ({ settings, settingsError, autoSaveStatus, onUpdateSettin
       </div>
 
       <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div>
+          <label htmlFor="outside-visual-quality" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>Outside Visual Quality</label>
+          <select
+            id="outside-visual-quality"
+            value={visualQuality}
+            onChange={(event) => onUpdateVisualQuality?.(event.target.value)}
+            style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#111827', color: '#f9fafb', border: '1px solid #374151' }}
+          >
+            <option value="balanced">Balanced (default)</option>
+            <option value="economy">Economy</option>
+          </select>
+          <div style={{ color: '#9ca3af', fontSize: '12px', marginTop: '5px' }}>
+            Economy lowers outside-view resolution and targets 30 fps. Balanced switches to Economy above 11,000 ft AGL and restores below 9,000 ft AGL.
+          </div>
+        </div>
+
         <div>
           <div style={{ fontWeight: 600, marginBottom: '8px' }}>Cloud Auto-Save</div>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

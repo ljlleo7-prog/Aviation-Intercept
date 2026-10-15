@@ -114,7 +114,13 @@ class BaseFailure {
             if (parameters) physicsService.setFailureParams(parameters);
         }
         if (typeof stageDef.effect === 'function') {
-            stageDef.effect(physicsService, this.intensity, this.variation.context);
+            const previousEvent = physicsService.failureDamageEventId;
+            physicsService.failureDamageEventId = `failure-${this.id}-${this.instanceId ?? 0}`;
+            try {
+                stageDef.effect(physicsService, this.intensity, this.variation.context);
+            } finally {
+                physicsService.failureDamageEventId = previousEvent;
+            }
         }
     }
 }

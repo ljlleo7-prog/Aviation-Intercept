@@ -149,3 +149,11 @@ vite.config.ts.timestamp-*
 
 # Claude worktrees
 .worktrees/
+
+test-results/
+
+previews/
+
+docs/
+.rtk/
+.trae/

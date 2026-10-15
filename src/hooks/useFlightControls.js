@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+import { manualPitchToElevator } from '../utils/manualFlightControls.js';
 
 /**
  * useFlightControls - Manages control inputs separately
@@ -43,8 +44,7 @@ export function useFlightControls(physicsService) {
   }, [resolvePhysicsService]);
 
   const setPitch = useCallback((value) => {
-    const normalized = Math.abs(value) <= 1 ? value : value / 100;
-    controlsRef.current.pitch = normalized * 25 * Math.PI / 180;
+    controlsRef.current.pitch = manualPitchToElevator(value);
   }, []);
 
   const setRoll = useCallback((value) => {
@@ -78,16 +78,34 @@ export function useFlightControls(physicsService) {
     resolvePhysicsService()?.setWheelBrakes?.(value);
   }, [resolvePhysicsService]);
 
+  const setToeBrakes = useCallback((value) => {
+    resolvePhysicsService()?.setToeBrakes?.(value);
+  }, [resolvePhysicsService]);
+
   const setGear = useCallback((value) => {
     resolvePhysicsService()?.setGear?.(value);
   }, [resolvePhysicsService]);
 
-  const getControls = useCallback(() => ({
-    ...controlsRef.current,
-    throttles: Array.isArray(controlsRef.current.engineThrottles)
-      ? controlsRef.current.engineThrottles
-      : undefined
-  }), []);
+  const inputServiceRef = useRef(null);
+  const getControls = useCallback(() => {
+    const service = resolvePhysicsService();
+    if (service && inputServiceRef.current !== service) {
+      // Airborne challenges spawn with thrust. Preserve it on the first physics
+      // tick instead of replacing it with the input buffer's idle defaults.
+      controlsRef.current.throttle = service.controls?.throttle ?? 0;
+      controlsRef.current.engineThrottles = Array.isArray(service.controls?.engineThrottles)
+        ? [...service.controls.engineThrottles]
+        : null;
+      controlsRef.current.trim = service.controls?.trim ?? 0;
+      inputServiceRef.current = service;
+    }
+    return {
+      ...controlsRef.current,
+      throttles: Array.isArray(controlsRef.current.engineThrottles)
+        ? controlsRef.current.engineThrottles
+        : undefined
+    };
+  }, [resolvePhysicsService]);
 
   return {
     setThrottle,
@@ -99,6 +117,7 @@ export function useFlightControls(physicsService) {
     setFlaps,
     setAirBrakes,
     setWheelBrakes,
+    setToeBrakes,
     setGear,
     getControls
   };

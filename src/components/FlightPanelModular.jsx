@@ -3,18 +3,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 // Import modular components
 import CrashWarningFlash from './CrashWarningFlash';
 import CrashPanel from './CrashPanel';
-import DraggableJoystick from './DraggableJoystick';
-import ThrustManager from './ThrustManager';
-import ModernAutopilotModule from './ModernAutopilotModule';
-import CommunicationModule from './CommunicationModule';
 import FlightPosePanel from './FlightPosePanel';
 import NavigationPanel from './NavigationPanel';
 import BoeingRadar from './radar/BoeingRadar';
 import AirbusRadar from './radar/AirbusRadar';
 import CentralPanel from './CentralPanel';
-import ControlSurfacePanel from './ControlSurfacePanel';
 import OverheadPanel from './OverheadPanel';
-import RudderPedal from './RudderPedal';
 import Sidebar from './Sidebar';
 import SaveLoadPanel from './SaveLoadPanel';
 import TimerPanel from './TimerPanel';
@@ -24,27 +18,27 @@ import SystemStatusPanel from './SystemStatusPanel';
 import CircuitBreakerPanel from './CircuitBreakerPanel';
 import SensoryFeedback from './SensoryFeedback';
 import SettingsPanel from './SettingsPanel';
-import FMA from './autoflight/FMA.jsx';
+import CenterControlPedestal from './CenterControlPedestal.jsx';
 import AircraftMainPanelReplica from './AircraftMainPanelReplica.jsx';
 import { useLanguage } from '../contexts/LanguageContext';
 import './FlightPanel.css';
 
-const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherData, onActionRequest, aircraftModel, aircraftData, selectedArrival, flightPlan, radioMessages, onRadioFreqChange, npcs, frequencyContext, currentRegion, timeScale, setTimeScale, onUpdateFlightPlan, availableRunways, startupStatus, playerSettings, playerSettingsError, autoSaveStatus, onUpdatePlayerSettings, ilsRunwayOptions = [] }) => {
+const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherData, onActionRequest, aircraftModel, aircraftData, selectedArrival, flightPlan, radioMessages, onRadioFreqChange, npcs, frequencyContext, currentRegion, timeScale, setTimeScale, onUpdateFlightPlan, availableRunways, startupStatus, playerSettings, playerSettingsError, autoSaveStatus, onUpdatePlayerSettings, visualQuality, onUpdateVisualQuality, ilsRunwayOptions = [] }) => {
   const { t } = useLanguage();
   const isAirbus = ((aircraftModel || '').toLowerCase().includes('a3') || (aircraftModel || '').toLowerCase().includes('airbus'));
   const efisFontClass = isAirbus ? 'efis-font-airbus' : 'efis-font-boeing';
   const efisFontFamily = isAirbus ? 'Courier New, monospace' : 'monospace';
   const resolvedTrueAirspeed = Number.isFinite(flightData?.trueAirspeed)
     ? flightData.trueAirspeed
-    : (Number.isFinite(flightData?.derived?.trueAirspeed) ? flightData.derived.trueAirspeed : 450);
+    : (Number.isFinite(flightData?.derived?.airspeed) ? flightData.derived.airspeed : 0);
   const resolvedGroundSpeed = Number.isFinite(flightData?.groundSpeed)
     ? flightData.groundSpeed
-    : (Number.isFinite(flightData?.derived?.groundSpeed) ? flightData.derived.groundSpeed : 430);
+    : (Number.isFinite(flightData?.derived?.groundSpeed) ? flightData.derived.groundSpeed : 0);
   const resolvedIndicatedAirspeed = Number.isFinite(flightData?.indicatedAirspeed)
     ? flightData.indicatedAirspeed
     : (Number.isFinite(flightData?.derived?.indicatedAirspeed)
         ? flightData.derived.indicatedAirspeed
-        : (Number.isFinite(flightData?.airspeed) ? flightData.airspeed : 280));
+        : 0);
   // Use flightData from parent component instead of creating own physics service
   const [showOverhead, setShowOverhead] = useState(false);
   const [showCircuitBreakers, setShowCircuitBreakers] = useState(false);
@@ -88,8 +82,10 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     activeWarnings: [],
     
     // Autopilot
-    autopilot: true,
-    autopilotMode: flightData?.autopilotMode || 'LNAV',
+    autopilot: flightData?.autopilot?.engaged ?? flightData?.autopilotEngaged ?? false,
+    autopilotMode: flightData?.autopilot?.mode ?? flightData?.autopilotMode ?? 'HDG',
+    vnavArmed: flightData?.autopilot?.vnavArmed ?? false,
+    autothrottleArmed: flightData?.autopilot?.autothrottleArmed ?? true,
     flightDirector: true,
     altitudeHold: true,
     headingHold: true,
@@ -183,6 +179,9 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
             : prevState.currentNarrative,
           flightPhase: flightData.phaseName || prevState.flightPhase,
 
+          controls: flightData.controls ?? prevState.controls ?? {},
+          onGround: flightData.onGround ?? flightData.debugPhysics?.isOnGround ?? false,
+
           // Surface controls
           flapsValue: flightData.flapsValue,
           gearValue: flightData.gearValue,
@@ -193,8 +192,10 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
           trimValue: typeof flightData.trimValue === 'number' ? flightData.trimValue : prevState.trimValue,
 
           // Autopilot - Update from physics service status
-          autopilot: flightData.autopilotEngaged === true,
-          autopilotMode: flightData.autopilotMode ?? prevState.autopilotMode ?? 'LNAV',
+          autopilot: flightData.autopilot?.engaged ?? (flightData.autopilotEngaged === true),
+          autopilotMode: flightData.autopilot?.mode ?? flightData.autopilotMode ?? prevState.autopilotMode ?? 'HDG',
+          vnavArmed: flightData.autopilot?.vnavArmed ?? prevState.vnavArmed,
+          autothrottleArmed: flightData.autopilot?.autothrottleArmed ?? prevState.autothrottleArmed,
           autopilotDebug: flightData.autopilotDebug ?? {},
           approachTelemetry: flightData.approachTelemetry ?? null,
           flightDirector: prevState.flightDirector,
@@ -260,86 +261,6 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
       setShowCrashPanel(true);
     }
   }, [flightData?.hasCrashed]);
-
-  // Control functions - Updated to use parent's physics service
-  const controlPitch = (amount) => {
-    if (onActionRequest) {
-      onActionRequest('pitch', amount);
-    }
-  };
-
-  const controlRoll = (amount) => {
-    if (onActionRequest) {
-      onActionRequest('roll', amount);
-    }
-  };
-
-  const controlYaw = (amount) => {
-    if (onActionRequest) {
-      onActionRequest('yaw', amount);
-    }
-  };
-
-  const controlThrust = (engineIndex, throttleValue) => {
-    // ✅ CLEAN ARCHITECTURE: Pass throttle in 0-1 range to parent
-    console.log('📡 FlightPanelModular: Thrust control:', {
-      engineIndex,
-      throttleValue,
-      percentage: (throttleValue * 100).toFixed(1) + '%'
-    });
-    
-    if (onActionRequest) {
-      onActionRequest('throttle', throttleValue, engineIndex); // Already in 0-1 range
-    }
-  };
-
-  const toggleAutopilot = () => {
-    if (onActionRequest) {
-      onActionRequest('toggle-autopilot');
-    }
-  };
-
-  const setAutopilotTargets = (targets) => {
-    if (onActionRequest) {
-      onActionRequest('set-autopilot-targets', targets);
-    }
-  };
-
-  const setAutopilotMode = (mode) => {
-    if (onActionRequest) {
-      onActionRequest('set-autopilot-mode', mode);
-    }
-  };
-
-  const setILSRunway = (airportCode, runwayName) => {
-    if (onActionRequest) {
-      onActionRequest('set-ils-runway', { airportCode, runwayName });
-    }
-  };
-
-  const controlFlaps = (position) => {
-    if (onActionRequest) {
-      onActionRequest('flaps', position);
-    }
-  };
-
-  const controlAirBrakes = (position) => {
-    if (onActionRequest) {
-      onActionRequest('airBrakes', position);
-    }
-  };
-
-  const controlWheelBrakes = (position) => {
-    if (onActionRequest) {
-      onActionRequest('wheelBrakes', position);
-    }
-  };
-
-  const controlGear = (position) => {
-    if (onActionRequest) {
-      onActionRequest('gear', position);
-    }
-  };
 
   const resetFlight = () => {
     // TODO: Implement control through parent component
@@ -453,32 +374,6 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
           }, t(flightState.currentNarrative?.content, flightState.currentNarrative?.data) || "Awaiting instructions...")
         ),
 
-        // Communication Module (Immersive Style)
-        React.createElement('div', {
-          style: {
-            width: '100%',
-            maxWidth: '600px',
-            background: 'rgba(0, 0, 0, 0.5)',
-            border: '1px solid #334155',
-            borderRadius: '8px',
-            padding: '20px',
-            marginBottom: '30px'
-          }
-        },
-          React.createElement(CommunicationModule, {
-            flightState,
-            setRadioFreq: (freq) => {
-              setFlightState(prev => ({ ...prev, radioFreq: freq }));
-              if (onRadioFreqChange) onRadioFreqChange(freq);
-            },
-            flightPlan,
-            radioMessages,
-            frequencyContext,
-            currentRegion,
-            immersiveMode: true
-          })
-        ),
-        
         // Skip/Continue Button
         React.createElement('div', { style: { position: 'relative' } },
           React.createElement('button', {
@@ -543,54 +438,8 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     return React.createElement('div', { className: 'modern-cockpit' },
       // Narrative Overlay REMOVED as requested (using Head Bar instead)
 
-      // Top Row: Autopilot + Comm
-      React.createElement('div', { 
-        style: { 
-          display: 'flex', 
-          gap: '8px', 
-          marginBottom: '8px',
-          width: '100%',
-          alignItems: 'stretch'
-        } 
-      },
-        React.createElement('div', {
-        style: {
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          flex: 1,
-          minWidth: 0
-        }
-      },
-        React.createElement(FMA, { fma: flightState.autopilotFma }),
-        React.createElement(ModernAutopilotModule, {
-          flightState,
-          setAutopilotTargets,
-          toggleAutopilot,
-          setAutopilotMode,
-          setAltimeter: (val) => setFlightState(prev => ({ ...prev, altimeter: val })),
-          frequencyContext, // Pass frequency context for ILS availability
-          efisFontFamily,
-          availableRunways,
-          selectedArrival,
-          setILSRunway
-        })
-      ),
-        React.createElement(CommunicationModule, {
-          flightState,
-          setRadioFreq: (freq) => {
-            setFlightState(prev => ({ ...prev, radioFreq: freq }));
-            if (onRadioFreqChange) onRadioFreqChange(freq);
-          },
-          flightPlan,
-          radioMessages,
-          frequencyContext,
-          currentRegion
-        })
-      ),
-      
       // Three parallel panels
-      React.createElement(AircraftMainPanelReplica, { aircraftModel, flightState, flightPlan, className: efisFontClass },
+      React.createElement(AircraftMainPanelReplica, { aircraftModel, flightState, flightPlan, npcs, onAutopilotAction: onActionRequest, className: efisFontClass },
         // Flight Pose Panel (Left)
         React.createElement(FlightPosePanel, { flightState, efisFontFamily }),
 
@@ -607,31 +456,13 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
         })
       ),
       
-      // Manual controls at bottom
-      React.createElement('div', { className: 'manual-controls' },
-        // Joystick & Rudder Group
-        React.createElement('div', { 
-          className: 'control-group-stick',
-          style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }
-        },
-          React.createElement(DraggableJoystick, { controlPitch, controlRoll, flightState }),
-          React.createElement(RudderPedal, { controlYaw, flightState })
-        ),
-        React.createElement('div', { className: 'thrust-manager-wrapper' },
-          React.createElement(ThrustManager, { controlThrust, flightState, onSystemAction: handleSystemAction })
-        ),
-        React.createElement(ControlSurfacePanel, {
-          controlFlaps,
-          controlGear,
-          controlAirBrakes,
-          controlWheelBrakes,
-          controlTrim: (payload) => onActionRequest('trim', payload),
-          controlNavFrequency: (payload) => onActionRequest('set-nav-frequency', payload),
-          flightState,
-          aircraftModel,
-          ilsRunwayOptions
-        })
-      )
+      React.createElement(CenterControlPedestal, {
+        aircraftModel,
+        isAirbus,
+        flightState,
+        onAction: onActionRequest,
+        ilsRunwayOptions
+      })
     );
   };
 
@@ -683,6 +514,8 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
         settingsError: playerSettingsError,
         autoSaveStatus,
         onUpdateSettings: onUpdatePlayerSettings,
+        visualQuality,
+        onUpdateVisualQuality,
         onClose: () => setActiveSidebarPanel(null)
     }),
 

@@ -1,0 +1,11 @@
+.outside-flight-view{position:relative;flex:none;width:100%;height:clamp(220px,35vh,420px);overflow:hidden;background:linear-gradient(#90a9b2,#b5c0b5 55%,#465641);border-bottom:4px solid #111719}
+.outside-flight-view canvas{display:block;width:100%;height:100%}
+.outside-flight-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#d8e1dc;font-size:13px;letter-spacing:.04em}
+.outside-flight-roof,.outside-flight-left,.outside-flight-right,.outside-flight-glare{position:absolute;pointer-events:none;background:#161b1b}
+.outside-flight-roof{left:0;right:0;top:0;height:13%;clip-path:polygon(0 0,100% 0,100% 70%,72% 100%,28% 100%,0 70%)}
+.outside-flight-left{left:0;top:9%;bottom:18%;width:7%;clip-path:polygon(0 0,65% 0,100% 100%,0 100%)}
+.outside-flight-right{right:0;top:9%;bottom:18%;width:7%;clip-path:polygon(35% 0,100% 0,100% 100%,0 100%)}
+.outside-flight-glare{left:0;right:0;bottom:0;height:18%;clip-path:polygon(0 32%,18% 15%,39% 0,61% 0,82% 15%,100% 32%,100% 100%,0 100%)}
+.outside-flight-caption{position:absolute;left:16px;bottom:18%;padding:5px 8px;background:#0810119c;color:#d8e2dc;font:11px monospace;letter-spacing:.08em;pointer-events:none}
+.outside-flight-attribution{position:absolute;right:12px;bottom:18%;padding:4px 6px;background:#081011c9;color:#d8e2dc;font:10px sans-serif;z-index:2}
+@media(max-width:700px){.outside-flight-view{height:clamp(180px,29vh,300px)}.outside-flight-roof{height:10%}.outside-flight-glare{height:15%}}

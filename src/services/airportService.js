@@ -356,7 +356,13 @@ class AirportService {
       return runwayNumber === 36 ? 360 : runwayNumber * 10;
     };
 
-    const primaryHeadingDeg = runway.bearing != null ? Number(runway.bearing) : parseRunwayHeading(primaryRunwayEnd);
+    // Runway designators are rounded labels; parallel strips can use different numbers.
+    const storedBearing = runway.bearing == null || String(runway.bearing).trim() === ''
+      ? NaN : Number(runway.bearing);
+    const primaryHeadingDeg = Number.isFinite(storedBearing)
+      ? ((storedBearing % 360) + 360) % 360
+      : parseRunwayHeading(primaryRunwayEnd);
+    const reciprocalHeadingDeg = (primaryHeadingDeg + 180) % 360;
     const hasStoredGeometry = runway.startLatitude != null && runway.startLongitude != null && runway.endLatitude != null && runway.endLongitude != null;
 
     if (hasStoredGeometry) {
@@ -373,7 +379,7 @@ class AirportService {
       const selectedIsReciprocal = selectedRunwayEnd && selectedRunwayEnd === reciprocalRunwayEnd;
       const finalRunwayName = selectedRunwayEnd || requestedRunway || primaryRunwayEnd || runway.name;
       const finalHeading = selectedIsReciprocal
-        ? parseRunwayHeading(reciprocalRunwayEnd)
+        ? reciprocalHeadingDeg
         : primaryHeadingDeg;
       return {
         airportCode: String(airportCode || airport.iata || airport.icao || '').trim().toUpperCase(),
@@ -429,10 +435,10 @@ class AirportService {
     if (selectedRunwayEnd && selectedRunwayEnd === reciprocalRunwayEnd) {
       start = p2;
       end = p1;
-      finalHeading = parseRunwayHeading(reciprocalRunwayEnd);
+      finalHeading = reciprocalHeadingDeg;
       finalRunwayName = reciprocalRunwayEnd;
     } else if (selectedRunwayEnd && selectedRunwayEnd === primaryRunwayEnd) {
-      finalHeading = parseRunwayHeading(primaryRunwayEnd);
+      finalHeading = primaryHeadingDeg;
       finalRunwayName = primaryRunwayEnd;
     }
 

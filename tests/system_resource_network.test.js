@@ -105,3 +105,34 @@ test('fuel pump damage removes pressure without treating suction feed as a line 
     assert.equal(service.systems.fuel.pressL, 0);
     assert.equal(service.systems.resourceNetwork.resources.includes('fuel_pressure_L'), false);
 });
+
+test('live diagnostics trace bus loss and distinguish isolation from damage', () => {
+    const service = new RealisticFlightPhysicsService(aircraft);
+    service.systems.electrical.busTie = false;
+    service.applyComponentDamage({ componentId: 'electrical.generator.1', severity: 1, eventId: 'generator-loss' });
+    service.update({}, 0.25);
+    let report = service.systems.resourceNetwork.diagnostics;
+    const find = id => report.components.find(component => component.componentId === id);
+    assert.equal(find('electrical.generator.1').status, 'failed');
+    assert.equal(find('electrical.bus_tie.2_to_1').status, 'isolated');
+    assert.equal(find('electrical.ac_bus.1').status, 'unpowered');
+    assert.ok(JSON.stringify(report.resources.find(resource => resource.resource === 'ac_bus_1').causes).includes('generator-loss'));
+
+    service.systems.electrical.busTie = true;
+    service.update({}, 0.25);
+    report = service.systems.resourceNetwork.diagnostics;
+    assert.equal(find('electrical.ac_bus.1').status, 'available');
+    assert.equal(find('electrical.generator.1').status, 'failed');
+    assert.deepEqual(report.resources.find(resource => resource.resource === 'ac_bus_1').causes, []);
+});
+
+test('failure-driven component damage retains the originating incident', () => {
+    const service = new RealisticFlightPhysicsService(aircraft);
+    service.failureSystem.triggerFailure('generator_drive_disconnect');
+    const failure = service.failureSystem.activeFailures.get('generator_drive_disconnect');
+    service.update({}, 0.25);
+    const damage = service.systems.resourceNetwork.damageLedger.find(entry => entry.componentId === 'electrical.generator.1');
+    assert.ok(damage);
+    assert.equal(damage.eventId, `failure-generator_drive_disconnect-${failure.instanceId}`);
+    assert.equal(service.failureDamageEventId, undefined);
+});

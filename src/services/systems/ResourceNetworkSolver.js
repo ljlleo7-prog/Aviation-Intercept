@@ -36,6 +36,6 @@ export default class ResourceNetworkSolver {
             });
         }
 
-        return { resources, activeComponents, suppliedBy };
+        return { resources, activeComponents, suppliedBy, commands: { ...commands } };
     }
 }

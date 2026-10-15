@@ -7,7 +7,11 @@ import { useFlightControls } from './useFlightControls.js';
 import { useFlightState } from './useFlightState.js';
 import { PhysicsCoordinator } from '../services/PhysicsCoordinator.js';
 
-export function useAircraftPhysics(config = {}, autoStart = true) {
+export function useAircraftPhysics(launchConfig = {}, autoStart = true) {
+  // A mounted flight owns one spawn. Route/weather/scenario updates must use the
+  // live service methods, never reconstruct the aircraft from launch conditions.
+  // Starting another flight unmounts this hook in App.
+  const [config] = useState(() => ({ ...launchConfig }));
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState(null);
   const [physicsState, setPhysicsState] = useState(null);
@@ -38,28 +42,8 @@ export function useAircraftPhysics(config = {}, autoStart = true) {
     return loopUpdatePhysics(dt, controls.getControls ? controls.getControls() : {});
   }, [loopUpdatePhysics, controls]);
 
-  const initializationKey = [
-    config.aircraftModel,
-    config.initialLatitude,
-    config.initialLongitude,
-    config.initialAltitude,
-    config.initialSpeed,
-    config.initialHeading,
-    config.airportElevation,
-    config.departure?.icao || config.departure?.iata || '',
-    config.arrival?.icao || config.arrival?.iata || '',
-    config.departureRunway || '',
-    config.arrivalRunway || '',
-    config.difficulty,
-    config.failureType,
-    config.scenarioMode ? 'scenario' : 'standard'
-  ].join('|');
-  const initializationKeyRef = useRef(null);
-
   useEffect(() => {
-    if (physicsServiceRef.current && initializationKeyRef.current === initializationKey) {
-      return;
-    }
+    if (physicsServiceRef.current) return;
 
     let cancelled = false;
     const previousService = physicsServiceRef.current;
@@ -93,11 +77,35 @@ export function useAircraftPhysics(config = {}, autoStart = true) {
         let initialHeading = Number.isFinite(config.initialHeading) ? config.initialHeading : 0;
         const departureAirport = config.departure?.iata || config.departure?.icao;
         const arrivalAirport = config.arrival?.iata || config.arrival?.icao;
-        const airport = config.arrivalRunway && arrivalAirport
-          ? arrivalAirport
-          : departureAirport || arrivalAirport;
-        const runway = config.arrivalRunway || config.departureRunway;
-        const geometry = airport && runway ? airportService.getRunwayGeometry(airport, runway) : null;
+        const departureRunway = config.departureRunway || config.departure?.runways?.[0]?.name;
+        const arrivalRunway = config.arrivalRunway || config.arrival?.runways?.[0]?.name;
+        const departureGeometry = departureAirport && departureRunway
+          ? airportService.getRunwayGeometry(departureAirport, departureRunway)
+          : null;
+        const arrivalGeometry = arrivalAirport && arrivalRunway
+          ? airportService.getRunwayGeometry(arrivalAirport, arrivalRunway)
+          : null;
+
+        // The initial coordinates identify which end of the route we are spawning at.
+        // Do not select the arrival runway merely because an arrival runway is present:
+        // normal takeoff spawns have both runway values, but their position is at
+        // departure. Selecting arrival geometry here mixes the reference threshold,
+        // heading, and ground-status calculations and can put the aircraft at the
+        // apparent far end of the rendered runway.
+        const distanceSq = (airport) => {
+          if (!airport || !Number.isFinite(airport.latitude) || !Number.isFinite(airport.longitude) ||
+              !Number.isFinite(config.initialLatitude) || !Number.isFinite(config.initialLongitude)) {
+            return Infinity;
+          }
+          const latitudeScale = Math.cos(config.initialLatitude * Math.PI / 180);
+          return (config.initialLatitude - airport.latitude) ** 2 +
+            ((config.initialLongitude - airport.longitude) * latitudeScale) ** 2;
+        };
+        const departureDistance = distanceSq(config.departure);
+        const arrivalDistance = distanceSq(config.arrival);
+        const geometry = departureGeometry && departureDistance <= arrivalDistance
+          ? departureGeometry
+          : arrivalGeometry || departureGeometry;
         if (geometry && Number.isFinite(geometry.heading) && (!Number.isFinite(config.initialHeading) || config.initialHeading === 0)) {
           initialHeading = geometry.heading;
         }
@@ -131,9 +139,12 @@ export function useAircraftPhysics(config = {}, autoStart = true) {
           });
         }
 
+        // Publish a runnable service atomically. A frame between publication and
+        // React's motion-control effect would otherwise zero an airborne spawn's
+        // velocity because new physics services start with motion disabled.
+        service.setMotionEnabled(true);
         physicsServiceRef.current = service;
         coordinatorRef.current = new PhysicsCoordinator(service);
-        initializationKeyRef.current = initializationKey;
         if (previousService && previousService !== service && typeof previousService.stop === 'function') {
           previousService.stop();
         }
@@ -153,25 +164,7 @@ export function useAircraftPhysics(config = {}, autoStart = true) {
     return () => {
       cancelled = true;
     };
-  }, [
-    handlePhysicsUpdate,
-    config.aircraftModel,
-    config.initialLatitude,
-    config.initialLongitude,
-    config.initialAltitude,
-    config.initialSpeed,
-    config.initialHeading,
-    config.flightPlan,
-    config.difficulty,
-    config.failureType,
-    config.departure,
-    config.arrival,
-    config.departureRunway,
-    config.arrivalRunway,
-    config.airportElevation,
-    config.scenarioMode,
-    initializationKey
-  ]);
+  }, [config, handlePhysicsUpdate]);
 
   useEffect(() => {
     if (autoStart && isInitialized) startLoop();

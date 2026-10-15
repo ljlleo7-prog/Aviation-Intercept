@@ -11,7 +11,7 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
   const lastTerrainUpdateRef = useRef(0);
   const lastWeatherUpdateRef = useRef(0);
   const [mapRange, setMapRange] = useState(40); // Default 40nm
-  const [displayMode, setDisplayMode] = useState('terrain');
+  const [displayMode, setDisplayMode] = useState('map');
   const [showLocalRouteMap, setShowLocalRouteMap] = useState(false);
 
   const groundSpeed = Number.isFinite(flightState?.groundSpeed)
@@ -29,8 +29,10 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
   const altitude = Number.isFinite(flightState?.altitude) ? flightState.altitude : 0;
 
   const waypoints = useMemo(() => (
-    Array.isArray(flightPlan?.waypoints) ? flightPlan.waypoints : []
-  ), [flightPlan?.waypoints]);
+    Array.isArray(flightPlan?.fms?.activePlan?.waypoints)
+      ? flightPlan.fms.activePlan.waypoints
+      : (Array.isArray(flightPlan?.waypoints) ? flightPlan.waypoints : [])
+  ), [flightPlan?.fms?.activePlan?.waypoints, flightPlan?.waypoints]);
   const navigationPath = useMemo(() => (
     Array.isArray(flightState?.navigationPath) ? flightState.navigationPath : []
   ), [flightState?.navigationPath]);
@@ -112,28 +114,13 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
       return { name: 'N/A', distance: 0 };
     }
 
-    let activeWaypoint = null;
-    let distanceToActive = Infinity;
-
-    if (
-      typeof flightState.currentWaypointIndex === 'number' &&
-      flightState.currentWaypointIndex >= 0 &&
-      flightState.currentWaypointIndex < waypoints.length
-    ) {
-      activeWaypoint = waypoints[flightState.currentWaypointIndex];
-      distanceToActive = calculateDistance(currentLat, currentLon, activeWaypoint.latitude, activeWaypoint.longitude);
-    } else {
-      let minDistance = Infinity;
-      for (let i = 0; i < waypoints.length; i++) {
-        const wp = waypoints[i];
-        const dist = calculateDistance(currentLat, currentLon, wp.latitude, wp.longitude);
-        if (dist < minDistance) {
-          minDistance = dist;
-          activeWaypoint = wp;
-          distanceToActive = dist;
-        }
-      }
-    }
+    const waypointIndex = Number.isInteger(flightState.currentWaypointIndex)
+      ? flightState.currentWaypointIndex
+      : (flightPlan?.fms?.currentWaypointIndex ?? flightPlan?.currentWaypointIndex ?? 0);
+    const activeWaypoint = waypoints[waypointIndex];
+    const distanceToActive = activeWaypoint && Number.isFinite(activeWaypoint.latitude) && Number.isFinite(activeWaypoint.longitude)
+      ? calculateDistance(currentLat, currentLon, activeWaypoint.latitude, activeWaypoint.longitude)
+      : 0;
 
     if (!activeWaypoint) {
       return { name: 'N/A', distance: 0 };
@@ -143,7 +130,7 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
       name: activeWaypoint.label || activeWaypoint.name || 'WPT',
       distance: Number.isFinite(distanceToActive) ? distanceToActive : 0
     };
-  }, [flightState?.latitude, flightState?.longitude, flightState?.currentWaypointIndex, waypoints]);
+  }, [flightState?.latitude, flightState?.longitude, flightState?.currentWaypointIndex, flightPlan?.currentWaypointIndex, flightPlan?.fms?.currentWaypointIndex, waypoints]);
 
   const currentNextWaypointName = activeWaypointData.name;
   const currentDistanceToNextWaypoint = activeWaypointData.distance;
@@ -203,7 +190,7 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
       ctx.rotate((-heading * Math.PI / 180));
 
       // --- Draw Terrain ---
-      if (flightState?.latitude && flightState?.longitude) {
+      if (displayMode === 'terrain' && Number.isFinite(flightState?.latitude) && Number.isFinite(flightState?.longitude)) {
         // Map range is radius in NM.
         // Canvas radius is pixels.
         const pxPerNm = radius / mapRange;
@@ -295,7 +282,7 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
         }
       }
       // --- End Draw Weather Radar ---
-      if (npcs && npcs.length > 0) {
+      if (displayMode === 'tcas' && npcs && npcs.length > 0 && Number.isFinite(flightState?.latitude) && Number.isFinite(flightState?.longitude)) {
           npcs.forEach(npc => {
             // Calculate relative position
             const dLat = npc.latitude - flightState.latitude;
@@ -415,16 +402,14 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
 
           ctx.save();
           ctx.translate(x, y);
-          ctx.rotate(-angle);
           ctx.rotate(heading * Math.PI / 180);
           ctx.fillText(label, 0, 0);
           ctx.restore();
         } else if (i % 30 === 0) {
           ctx.save();
           ctx.translate(x, y);
-          ctx.rotate(-angle);
           ctx.rotate(heading * Math.PI / 180);
-          ctx.fillText(i.toString(), 0, 0);
+          ctx.fillText(String(i / 10).padStart(2, '0'), 0, 0);
           ctx.restore();
         }
       }
@@ -441,7 +426,8 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
           gsDeviationDeg: Number.isFinite(ilsData.gsDeviationDeg) ? ilsData.gsDeviationDeg : null,
           runway: ilsData.runway || ''
         };
-      } else if (nearbyRunways.length > 0 && typeof flightState?.latitude === 'number') {
+      }
+      if (nearbyRunways.length > 0 && typeof flightState?.latitude === 'number' && (displayMode === 'airport' || displayMode === 'map')) {
         let closestRw = null;
         let minRwDist = Infinity;
         
@@ -528,7 +514,7 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
         }
       }
 
-      if (Array.isArray(navigationPath) && navigationPath.length > 0 && typeof flightState?.latitude === 'number' && typeof flightState?.longitude === 'number') {
+      if (waypoints.length === 0 && navigationPath.length > 0 && typeof flightState?.latitude === 'number' && typeof flightState?.longitude === 'number') {
         const maxRangeNm = mapRange;
         const points = navigationPath.map((wp) => {
           const distNm = calculateDistance(flightState.latitude, flightState.longitude, wp.latitude, wp.longitude);
@@ -789,19 +775,27 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
           fontWeight: 'bold'
         }
       }, showLocalRouteMap ? 'MAP' : 'EFIS'),
-      React.createElement('button', {
-        onClick: () => setDisplayMode(prev => prev === 'terrain' ? 'weather' : 'terrain'),
-        style: {
-          background: '#0b140b',
-          border: `1px solid ${theme?.controlBorder || '#ffffff'}`,
-          color: infoColor,
-          borderRadius: '2px',
-          padding: '2px 8px',
-          fontSize: '10px',
-          cursor: 'pointer',
-          fontWeight: 'bold'
-        }
-      }, displayMode === 'terrain' ? 'TERR' : 'WXR')
+      React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '3px', justifyContent: 'flex-end' } },
+        [['map', 'MAP'], ['terrain', 'TERR'], ['weather', 'WXR'], ['tcas', 'TCAS'], ['airport', 'APT']].map(([mode, label]) =>
+          React.createElement('button', {
+            key: mode,
+            type: 'button',
+            onClick: () => setDisplayMode(mode),
+            'aria-pressed': displayMode === mode,
+            title: `${label} radar mode`,
+            style: {
+              background: displayMode === mode ? '#244a40' : '#0b140b',
+              border: `1px solid ${theme?.controlBorder || '#ffffff'}`,
+              color: infoColor,
+              borderRadius: '2px',
+              padding: '2px 5px',
+              fontSize: '10px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }
+          }, label)
+        )
+      )
     )
   );
 };

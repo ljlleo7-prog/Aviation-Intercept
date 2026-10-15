@@ -1,6 +1,32 @@
-import { Quaternion } from '../../utils/flightMath.js';
+import { Quaternion, Vector3 } from '../../utils/flightMath.js';
 
 export default class GroundInteractionService {
+    getContactPoints(gearHeight, gearDown = true, stiffness = 3000000) {
+        const height = gearDown ? gearHeight : Math.min(0.75, gearHeight);
+        return [
+            { name: 'nose', pos: new Vector3(14, 0, height), k: stiffness * 0.2, c: 35000 },
+            { name: 'mainL', pos: new Vector3(-2, -3.5, height), k: stiffness * 0.4, c: 150000 },
+            { name: 'mainR', pos: new Vector3(-2, 3.5, height), k: stiffness * 0.4, c: 150000 }
+        ];
+    }
+
+    resolveSurfaceContact(state, groundZ, gearHeight, gearDown) {
+        const points = this.getContactPoints(gearHeight, gearDown);
+        const lowestOffset = Math.max(...points.map(point => state.quat.rotate(point.pos).z));
+        const penetration = state.pos.z + lowestOffset - groundZ;
+        const sinkRate = state.quat.rotate(state.vel).z;
+        const maxCompression = gearDown ? 0.35 : 0;
+        if (penetration > maxCompression) {
+            state.pos.z -= penetration - maxCompression;
+            // Remove only downward Earth-frame motion, preserving horizontal rollout.
+            if (sinkRate > 0) {
+                const inverse = new Quaternion(state.quat.w, -state.quat.x, -state.quat.y, -state.quat.z);
+                state.vel = state.vel.sub(inverse.rotate(new Vector3(0, 0, sinkRate)));
+            }
+        }
+        return { contact: penetration >= -1e-6, sinkRate };
+    }
+
     updateGroundStatus(state, runwayGeometry, terrainElevation, airportElevation) {
         if (!runwayGeometry) {
             const groundHeightAMSL = terrainElevation ?? airportElevation;
@@ -44,8 +70,9 @@ export default class GroundInteractionService {
         else if (distAlong > length) remaining = 0;
         else remaining = length - distAlong;
 
-        let groundHeightAMSL = airportElevation;
-        if (status !== 'RUNWAY' && status !== 'GRASS' && terrainElevation !== null) {
+        const runwayElevation = thresholdStart.elevation == null ? NaN : Number(thresholdStart.elevation);
+        let groundHeightAMSL = Number.isFinite(runwayElevation) ? runwayElevation * 0.3048 : airportElevation;
+        if (status !== 'RUNWAY' && status !== 'GRASS' && Number.isFinite(terrainElevation)) {
             groundHeightAMSL = terrainElevation;
         }
 
@@ -55,10 +82,13 @@ export default class GroundInteractionService {
         };
     }
 
-    applyRunwayStabilizer(state, runwayGeometry, onGround, groundStatus, difficulty) {
+    applyRunwayStabilizer(state, runwayGeometry, onGround, groundStatus, difficulty, rudder = 0) {
         if (difficulty === 'devil') return null;
         if (!onGround || groundStatus.status !== 'RUNWAY') return null;
         if (!runwayGeometry?.thresholdStart) return null;
+
+        // Taxi steering must remain free; runway assistance cannot erase pedal turns.
+        if (state.vel.magnitude() < 15 || Math.abs(rudder) > 0.01) return null;
 
         const geom = runwayGeometry;
         const lat0 = geom.thresholdStart.latitude;

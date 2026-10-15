@@ -4,6 +4,8 @@ Status: planning document only
 Scope: forward views from the cockpit, with emphasis on approach, landing, takeoff, and runway operations  
 Decision: use Three.js directly behind the replica cockpit, without attempting a general-purpose scenery engine
 
+Ground-layout update: [the airport ground visuals plan](V2_GROUND_VISUALS_PLAN.md) now specifies imported taxiway/apron layouts with procedural fallback. It supersedes this document's decorative-taxiway restriction while keeping operational taxi guidance separate.
+
 ## 1. Product decision
 
 Version 2.0 should add a small, procedural **airport visual bubble** rather than a continuous 3D world.
@@ -124,7 +126,7 @@ Surround the runway with a few large material zones rather than a polygon-perfec
 - drainage, dirt, mowing, or concrete variation baked into ground decals;
 - distant urban/tree light cards when conditions and region justify them.
 
-Do not generate a connected taxiway network in the landing release. A plausible taxiway that does not match reality can cause worse operational decisions than having none. The runway rollout can end with a neutral “taxi view unavailable” transition until verified layout data is introduced.
+Render decorative connected taxiway/apron layouts using the source selection, confidence, shared elevation and performance rules in [the airport ground visuals plan](V2_GROUND_VISUALS_PLAN.md). Generated surface geometry does not provide operational taxi guidance, clearance or scoring.
 
 ### Terrain
 

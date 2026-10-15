@@ -53,6 +53,7 @@ class WarningSystem {
      */
     update(physicsState, dt) {
         this.activeWarnings = [];
+        this.onGround = physicsState?.debugPhysics?.isOnGround === true;
 
         if (!physicsState) return this.activeWarnings;
 
@@ -93,8 +94,14 @@ class WarningSystem {
         const pitchDeg = pitchRad * 180 / Math.PI;
         const alpha = debugPhysics.alpha * 180 / Math.PI;
         
+        const structural = physicsState.structural;
+        this.operatingSpeedLimit = structural?.vmo;
+        if (structural?.overspeed) this.addWarning('OVERSPEED', 'OVERSPEED', 'CRITICAL', true);
+        if (structural?.overload) this.addWarning('G_LIMIT', 'G LOAD LIMIT', 'CRITICAL', true);
+        for (const event of structural?.events || []) this.addWarning(event.id, event.message, 'CRITICAL', true);
+
         // --- GPWS Checks ---
-        this.checkGPWS(altitudeAGL, verticalSpeed, gear, flaps, airspeed, groundStatus);
+        this.checkGPWS(altitudeAGL, verticalSpeed, gear, flaps, airspeed, groundStatus, physicsState);
 
         // --- Flight Envelope Checks ---
         this.checkEnvelope(alpha, airspeed, rollDeg, pitchDeg, flaps, gear, groundStatus);
@@ -125,82 +132,48 @@ class WarningSystem {
     }
 
     checkGPWS(agl, vs, gear, flaps, airspeed, groundStatus, physicsState) {
-        // Disable GPWS if in Airport Region (Runway or Grass below)
-        // OR if in Landing Configuration (Gear Down + Flaps) - as per user request to avoid nuisance
-        const isLandingConfig = gear > 0.9 && flaps > 0.5;
-        
-        if ((groundStatus && (groundStatus.status === 'RUNWAY' || groundStatus.status === 'GRASS')) || isLandingConfig) {
-            return;
+        const onGround = physicsState?.debugPhysics?.isOnGround === true;
+        if (onGround || !Number.isFinite(agl) || agl < 0) return;
+        const airportRegion = ['RUNWAY', 'GRASS'].includes(groundStatus?.status);
+        const normalApproach = airportRegion && gear > 0.9 && flaps > 0.1 &&
+            airspeed < 200 && vs >= -1000 && vs < 0;
+        if (!normalApproach && vs < -1000 && agl > 0) {
+            const impactTime = agl / (-vs / 60);
+            if (impactTime < 10) this.addWarning('GPWS_PULL_UP', 'PULL UP', 'CRITICAL', true);
+            else if (impactTime < 20) this.addWarning('GPWS_TERRAIN', 'TERRAIN', 'CRITICAL', true);
         }
-
-        const PREDICTION_TIME_WARN = 20; // Seconds
-        const PREDICTION_TIME_PULL_UP = 10; // Seconds
-
-        // --- Mode 1: Excessive Sink Rate & Collision Prediction (Vertical) ---
-        // User Request: "descending with an estimated 20s before collision based on sinkrate"
-        
-        // vs is negative ft/min when descending. 
-        if (vs < -100 && agl > 0) { 
-             const sinkRateFtSec = -vs / 60; // Convert to ft/sec positive value
-             const ttiSink = agl / sinkRateFtSec; // Seconds to impact
-             
-             if (ttiSink < PREDICTION_TIME_PULL_UP) {
-                  this.addWarning('GPWS_PULL_UP', 'PULL UP', 'CRITICAL', true);
-             } else if (ttiSink < PREDICTION_TIME_WARN) {
-                  this.addWarning('GPWS_TERRAIN', 'TERRAIN', 'CRITICAL', true);
-             }
+        const derived = physicsState?.derived;
+        const position = physicsState?.position;
+        if (derived && position && derived.groundSpeed > 30 &&
+            Number.isFinite(position.latitude) && Number.isFinite(position.longitude)) {
+            // Follow ground track, including wind drift, and sample the entire path.
+            const velocity = physicsState.velocity;
+            const heading = velocity && Math.hypot(velocity.u, velocity.v) > 1
+                ? (physicsState.groundTrack ?? derived.heading) : derived.heading;
+            const headingRad = heading * Math.PI / 180;
+            for (let seconds = 2; seconds <= 20; seconds += 2) {
+                const distanceDegrees = derived.groundSpeed * seconds / 3600 / 60;
+                const lat = position.latitude + distanceDegrees * Math.cos(headingRad);
+                const lon = position.longitude + distanceDegrees * Math.sin(headingRad) /
+                    Math.max(0.01, Math.abs(Math.cos(position.latitude * Math.PI / 180)));
+                const terrain = terrainRadarService.getTerrainHeight(lat, lon);
+                const predictedAltitude = derived.altitude_ft + vs * seconds / 60;
+                // Normal approaches may intersect the runway; rising terrain remains protected.
+                const approachSurface = normalApproach && terrain <= derived.airport_elevation_ft + 100;
+                if (Number.isFinite(terrain) && !approachSurface && terrain >= predictedAltitude) {
+                    this.addWarning(seconds <= 10 ? 'GPWS_PULL_UP' : 'GPWS_TERRAIN',
+                        seconds <= 10 ? 'PULL UP' : 'TERRAIN', 'CRITICAL', true);
+                    break;
+                }
+            }
         }
-        
-        // --- Mode 2: Terrain Ahead Prediction (Horizontal Lookahead) ---
-        // User Request: "terrain higher than me in front of me... within 20s reach... at any airspeed"
-        
-        if (physicsState && physicsState.derived && physicsState.position) {
-             const validGS = physicsState.derived.groundSpeed || 0; // Knots
-             const validHeading = physicsState.derived.heading || 0; // Degrees
-             const lat = physicsState.position.latitude || 0;
-             const lon = physicsState.position.longitude || 0;
-             const altAMSL = physicsState.derived.altitude_ft || 0;
-             
-             // Calculate future positions
-             const headingRad = validHeading * Math.PI / 180;
-             const nmPerSec = validGS / 3600;
-             
-             // Check 10s (PULL UP)
-             const distNm10 = nmPerSec * PREDICTION_TIME_PULL_UP;
-             const distDeg10 = distNm10 / 60;
-             const dLat10 = distDeg10 * Math.cos(headingRad);
-             const dLon10 = distDeg10 * Math.sin(headingRad) / Math.cos(lat * Math.PI / 180);
-             
-             const futureTerrainFt10 = terrainRadarService.getTerrainHeight(lat + dLat10, lon + dLon10);
-             
-             if (futureTerrainFt10 !== null && futureTerrainFt10 > altAMSL) {
-                  this.addWarning('GPWS_PULL_UP', 'PULL UP', 'CRITICAL', true);
-             } else {
-                  // Check 20s (TERRAIN)
-                  const distNm20 = nmPerSec * PREDICTION_TIME_WARN;
-                  const distDeg20 = distNm20 / 60;
-                  const dLat20 = distDeg20 * Math.cos(headingRad);
-                  const dLon20 = distDeg20 * Math.sin(headingRad) / Math.cos(lat * Math.PI / 180);
-                  
-                  const futureTerrainFt20 = terrainRadarService.getTerrainHeight(lat + dLat20, lon + dLon20);
-                  
-                  if (futureTerrainFt20 !== null && futureTerrainFt20 > altAMSL) {
-                       this.addWarning('GPWS_TERRAIN', 'TERRAIN', 'CRITICAL', true);
-                  }
-             }
-        }
-
-        // Mode 4: Unsafe Terrain Clearance (Legacy Checks)
-        if (agl < this.thresholds.gearWarningAlt && !gear && airspeed < 180) {
+        if (vs < -300 && !normalApproach && agl < this.thresholds.gearWarningAlt && gear < 0.1 && airspeed < 180) {
             this.addWarning('GPWS_TOO_LOW_GEAR', 'TOO LOW GEAR', 'WARNING');
-        }
-        if (agl < this.thresholds.flapsWarningAlt && flaps < 0.1 && gear && airspeed < 160) {
-            this.addWarning('GPWS_TOO_LOW_FLAPS', 'TOO LOW FLAPS', 'WARNING');
         }
     }
 
     checkEnvelope(alpha, airspeed, roll, pitch, flaps, gear, groundStatus) {
-        const onGround = groundStatus && (groundStatus.status === 'RUNWAY' || groundStatus.status === 'GRASS');
+        const onGround = this.onGround === true;
 
         // Stall Warning (Disabled on Ground)
         if (!onGround && alpha > this.thresholds.stallAlpha) {
@@ -208,7 +181,7 @@ class WarningSystem {
         }
 
         // Overspeed
-        if (airspeed > this.thresholds.overspeedKnots) {
+        if (airspeed > (this.operatingSpeedLimit ?? this.thresholds.overspeedKnots)) {
             this.addWarning('OVERSPEED', 'OVERSPEED', 'CRITICAL', true);
         }
 
@@ -280,7 +253,7 @@ class WarningSystem {
     checkConfiguration(flaps, gear, airBrakes, throttle, groundStatus, pitch, brakes, altitudeAGL) {
         // 1. Takeoff Configuration
         // If on ground, high throttle, and flaps not set or brakes on
-        const onGround = groundStatus && (groundStatus.status === 'RUNWAY' || groundStatus.status === 'GRASS');
+        const onGround = this.onGround === true;
         if (onGround && throttle > 0.7) {
             if (flaps < 0.1) {
                 this.addWarning('CONFIG_FLAPS', 'CONFIG FLAPS', 'WARNING', true);
@@ -325,7 +298,7 @@ class WarningSystem {
         if (!systems) return;
 
         // Engine Fire
-        if (engineParams) {
+        if (Array.isArray(engineParams)) {
             engineParams.forEach((eng, i) => {
                 if (eng.fire) this.addWarning(`ENG${i+1}_FIRE`, `ENGINE ${i+1} FIRE`, 'CRITICAL', true);
             });

@@ -8,18 +8,19 @@ export default class EnvironmentService {
     }
 
     calculateEnvironment(z_down) {
-        const h = -z_down;
-        let temp = this.CONSTANTS.SEA_LEVEL_TEMP + (this.CONSTANTS.TEMP_LAPSE_RATE * h);
-        if (temp < 216.65) temp = 216.65;
+        const h = Math.max(0, -z_down);
         const envTempC = this.environment?.temperature;
-        // Apply surface temperature as an ISA deviation, not a flat override at all altitudes.
-        // ISA deviation = envTempC - ISA_SL_temp_C (15°C). Add deviation to lapse-rate result.
-        if (envTempC != null) {
-            const isaDev = envTempC - 15;
-            temp = Math.max(216.65, temp + isaDev);
-        }
-
-        const pressure = this.CONSTANTS.SEA_LEVEL_PRESSURE * Math.pow(temp / this.CONSTANTS.SEA_LEVEL_TEMP, -this.CONSTANTS.G / (this.CONSTANTS.TEMP_LAPSE_RATE * this.CONSTANTS.R_GAS));
+        const surfaceTemp = Math.max(216.65, this.CONSTANTS.SEA_LEVEL_TEMP + (envTempC != null ? envTempC - 15 : 0));
+        const lapse = this.CONSTANTS.TEMP_LAPSE_RATE;
+        const tropopauseHeight = Math.min(11000, Math.max(0, (216.65 - surfaceTemp) / lapse));
+        const tropopauseTemp = surfaceTemp + lapse * tropopauseHeight;
+        const lapseHeight = Math.min(h, tropopauseHeight);
+        const temp = surfaceTemp + lapse * lapseHeight;
+        const lapsePressure = this.CONSTANTS.SEA_LEVEL_PRESSURE *
+            Math.pow(temp / surfaceTemp, -this.CONSTANTS.G / (lapse * this.CONSTANTS.R_GAS));
+        const pressure = h > tropopauseHeight
+            ? lapsePressure * Math.exp(-this.CONSTANTS.G * (h - tropopauseHeight) / (this.CONSTANTS.R_GAS * tropopauseTemp))
+            : lapsePressure;
         const density = pressure / (this.CONSTANTS.R_GAS * temp);
         const speedOfSound = Math.sqrt(this.CONSTANTS.GAMMA * this.CONSTANTS.R_GAS * temp);
         const wind = this.environment?.wind || new Vector3(0, 0, 0);

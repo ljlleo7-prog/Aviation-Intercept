@@ -1,8 +1,25 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { failureGraphManager } from '../services/aviationIntercept/FailureGraphManager.js';
 
+const ResourceCauses = ({ causes }) => (
+    <ul style={{ paddingLeft: '14px' }}>
+        {causes.map(cause => (
+            <li key={cause.componentId}>
+                {cause.componentId}: {cause.status}{cause.eventId ? ` (${cause.eventId})` : ''}
+                {cause.dependencies.map(dependency => (
+                    <div key={dependency.resource}>
+                        {dependency.resource}
+                        <ResourceCauses causes={dependency.providers} />
+                    </div>
+                ))}
+            </li>
+        ))}
+    </ul>
+);
+
 const FailureDebugPanel = ({ physicsService, onClose }) => {
     const [activeFailures, setActiveFailures] = useState([]);
+    const [systemDiagnostics, setSystemDiagnostics] = useState(null);
     const [graphFailures, setGraphFailures] = useState([]);
     const [graphEdges, setGraphEdges] = useState([]);
     const [graphSource, setGraphSource] = useState('');
@@ -19,6 +36,7 @@ const FailureDebugPanel = ({ physicsService, onClose }) => {
             const fs = physicsService.failureSystem;
             if (!fs) return;
             setActiveFailures(Array.from(fs.activeFailures.values()));
+            setSystemDiagnostics(physicsService.systems?.resourceNetwork?.diagnostics || null);
         }, 250);
         return () => clearInterval(interval);
     }, [physicsService]);
@@ -383,6 +401,23 @@ const FailureDebugPanel = ({ physicsService, onClose }) => {
                     gap: '12px',
                     overflow: 'auto'
                 }}>
+                    {systemDiagnostics && (
+                        <div style={{ fontSize: '10px', color: '#9fb2c5' }}>
+                            <div style={{ marginBottom: '8px' }}>LIVE OVERHEAD SYSTEMS</div>
+                            {systemDiagnostics.resources.filter(resource => !resource.available).map(resource => (
+                                <details key={resource.resource} style={{ marginBottom: '6px' }}>
+                                    <summary>{resource.resource}: unavailable</summary>
+                                    <ResourceCauses causes={resource.causes} />
+                                </details>
+                            ))}
+                            {systemDiagnostics.components.map(component => (
+                                <div key={component.componentId} title={`Command: ${component.command || 'automatic'}\nMissing: ${component.missingResources.join(', ') || 'none'}\nIncident: ${component.lastEventId || 'none'}`} style={{ padding: '4px 0', color: component.status === 'failed' ? '#ff7777' : component.status === 'available' ? '#8bd6a0' : '#e9c47b' }}>
+                                    {component.componentId}: {component.status}
+                                    {component.missingResources.length > 0 && <div style={{ color: '#91a4b8' }}>Needs {component.missingResources.join(' / ')}</div>}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     <div style={{ fontSize: '11px', color: '#7f93a8' }}>SELECTED FAILURE</div>
                     {selectedFailure ? (
                         <>

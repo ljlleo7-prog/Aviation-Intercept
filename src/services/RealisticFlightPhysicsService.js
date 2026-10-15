@@ -16,6 +16,7 @@ import FADECService from './FADECService.js';
 import RealisticAutopilotService from './RealisticAutopilotService.js';
 import FailureHandler from './failures/FailureHandler.js';
 import WarningSystem from './WarningSystem.js';
+import StructuralLimitsService from './physics/StructuralLimitsService.js';
 import { airportService } from './airportService.js';
 import { Vector3, Quaternion, calculateDistanceMeters } from '../utils/flightMath.js';
 import EnvironmentService from './physics/EnvironmentService.js';
@@ -185,6 +186,7 @@ class RealisticFlightPhysicsService {
             engineCount: this.aircraft.engineCount
         });
         this.warningSystem = new WarningSystem();
+        this.structuralLimits = new StructuralLimitsService(aircraftData);
         this.sensors = { 
             pitotBlocked: false,
             staticBlocked: false,
@@ -334,7 +336,7 @@ class RealisticFlightPhysicsService {
             Cdr: 0.1, // Rudder effectiveness
             
             // Ground Handling
-            gearHeight: 3.0, // Distance from CG to ground when gear is down
+            gearHeight: Number.isFinite(data.gearHeight) && data.gearHeight > 0 ? data.gearHeight : 3.0,
             gearStiffness: 3000000, // Increased to support ~80 tons (Weight ~800kN). Compression ~0.3m
             gearDamping: 300000, // Increased for stability
             frictionCoeff: 0.02,
@@ -365,7 +367,7 @@ class RealisticFlightPhysicsService {
         this.updateGroundStatus();
 
         // Sub-stepping for stability (High stiffness springs need small dt)
-        const subSteps = 5;
+        const subSteps = Math.max(5, Math.ceil(dt / (1 / 300)));
         const subDt = dt / subSteps;
 
         // --- Autopilot Update ---
@@ -461,6 +463,14 @@ class RealisticFlightPhysicsService {
             trim: Number.isFinite(input?.trim) ? input.trim : this.controls.trim
         };
 
+        const cwsPitch = this.autopilot.engaged && this.autopilot.mode === 'CWS' && Math.abs(Number(input?.pitch) || 0) > 0.08;
+        const cwsRoll = this.autopilot.engaged && this.autopilot.mode === 'CWS' && Math.abs(Number(input?.roll) || 0) > 0.08;
+        if (cwsPitch || cwsRoll) {
+            this.autopilot.setTargets({
+                ...(cwsPitch ? { altitude: apState.altitude, vs: apState.verticalSpeed } : {}),
+                ...(cwsRoll ? { heading: apState.heading } : {})
+            });
+        }
         const apOutputs = this.autopilot.update(apState, autopilotControlReference, dt);
 
         let finalInput = input;
@@ -470,9 +480,9 @@ class RealisticFlightPhysicsService {
                 ...input,
                 autopilotActive: true,
                 throttles: null,
-                throttle: apOutputs.throttle,
-                pitch: apOutputs.elevator, // Map Elevator Command to Pitch Input
-                roll: apOutputs.aileron,   // Map Aileron Command to Roll Input
+                throttle: this.autopilot.autothrottleArmed ? apOutputs.throttle : autopilotControlReference.throttle,
+                pitch: cwsPitch ? input.pitch : apOutputs.elevator,
+                roll: cwsRoll ? input.roll : apOutputs.aileron,
                 trim: apOutputs.trim,
                 yaw: apOutputs.rudder
             };
@@ -524,7 +534,7 @@ class RealisticFlightPhysicsService {
             this.state.mass = emptyWeight + this.state.fuel + this.payloadMass;
 
             // 4. Calculate Forces and Moments
-            const { forces, moments, aeroForces, thrustForces, gravityForces, groundForces, debug } = this.calculateAerodynamicsAndGround(env);
+            const { forces, moments, aeroForces, thrustForces, gravityForces, groundForces, debug } = this.calculateAerodynamicsAndGround(env, subDt);
             
             // Store last for UI
             if (i === subSteps - 1) {
@@ -548,7 +558,7 @@ class RealisticFlightPhysicsService {
             this.updateGroundStatus();
 
             // 6. Constraints
-            this.checkConstraints();
+            this.checkConstraints(subDt);
             if (this.crashed) break;
         }
 
@@ -726,11 +736,11 @@ class RealisticFlightPhysicsService {
     }
 
     applyComponentDamage(damage) {
-        return this.systemModel?.applyDamage({ time: this.time, ...damage });
+        return this.systemModel?.applyDamage({ time: this.time, eventId: this.failureDamageEventId, ...damage });
     }
 
     applyRegionalDamage(event) {
-        return this.systemModel?.applyRegionalDamage({ time: this.time, ...event }) || [];
+        return this.systemModel?.applyRegionalDamage({ time: this.time, eventId: this.failureDamageEventId, ...event }) || [];
     }
 
     calculateEnvironment(z_down) {
@@ -920,9 +930,9 @@ class RealisticFlightPhysicsService {
         const CD_flaps_base = flapIncrements.cd;
 
         // Apply Control Effectiveness (Failures)
-        const effAileron = this.controls.aileron * (this.controlEffectiveness.aileron !== undefined ? this.controlEffectiveness.aileron : 1.0);
-        const effElevator = this.controls.elevator * (this.controlEffectiveness.elevator !== undefined ? this.controlEffectiveness.elevator : 1.0);
-        const effRudder = this.controls.rudder * (this.controlEffectiveness.rudder !== undefined ? this.controlEffectiveness.rudder : 1.0);
+        const effAileron = this.controls.aileron * Math.min(this.structuralLimits.health.aileron, this.controlEffectiveness.aileron ?? 1);
+        const effElevator = this.controls.elevator * Math.min(this.structuralLimits.health.elevator, this.controlEffectiveness.elevator ?? 1);
+        const effRudder = this.controls.rudder * Math.min(this.structuralLimits.health.rudder, this.controlEffectiveness.rudder ?? 1);
 
         // Airbrake Increments
         const airbrakeIncrements = this.getAirbrakeIncrements();
@@ -976,7 +986,9 @@ class RealisticFlightPhysicsService {
         const CL_induced_calc = Math.min(Math.abs(CL), 1.35); // Cap effective CL for induced drag
         const CD_induced = this.aircraft.K * CL_induced_calc * CL_induced_calc * groundEffectFactor;
         
-        let CD = this.aircraft.CD0 + CD_induced + CD_flaps + CD_gear + CD_brakes + CD_elevator + rollCompressionDrag;
+        const mach = V_airspeed / this.calculateEnvironment(this.state.pos.z).speedOfSound;
+        const waveDrag = Math.min(0.4, Math.max(0, mach - this.structuralLimits.limits.mmo + 0.04) ** 2 * 2);
+        let CD = waveDrag + (1 - this.structuralLimits.health.wing) * 0.12 + this.aircraft.CD0 + CD_induced + CD_flaps + CD_gear + CD_brakes + CD_elevator + rollCompressionDrag;
         if (icingLevel > 0) {
             CD += 0.1 * icingLevel;
         }
@@ -1068,7 +1080,7 @@ class RealisticFlightPhysicsService {
         return { CL, CD, CY, Cm, Cl, Cn };
     }
 
-    calculateAerodynamicsAndGround(env) {
+    calculateAerodynamicsAndGround(env, dt = 0) {
         // --- Velocity (Airspeed vs Ground Speed) ---
         // this.state.vel is V_ground_body (Ground Velocity in Body Frame)
         
@@ -1118,7 +1130,10 @@ class RealisticFlightPhysicsService {
         const b = this.aircraft.wingSpan;
         const c = this.aircraft.chord;
 
-        const F_lift = q * S * CL;
+        this.structuralLimits.update({ loadFactor: q * S * CL / (this.state.mass * this.CONSTANTS.G),
+            dynamicPressure: q, mach: V_airspeed / env.speedOfSound, onGround: this.onGround, dt },
+            damage => this.applyComponentDamage(damage));
+        const F_lift = q * S * CL * this.structuralLimits.health.wing;
         const F_drag = q * S * CD;
         const F_side = q * S * CY;
 
@@ -1195,11 +1210,9 @@ class RealisticFlightPhysicsService {
         // Gear Definitions (Position relative to CG in Body Frame)
         // x: Forward, y: Right, z: Down (CG at 0,0,0)
         // Tuned for stability: Softer springs, higher damping
-        const gears = [
-            { name: 'nose', pos: new Vector3(14.0, 0, 3.0), k: 80000, c: 35000 },  // Softer nose
-            { name: 'mainL', pos: new Vector3(-2.0, -3.5, 3.0), k: 150000, c: 150000 }, // Softer main, critical damping
-            { name: 'mainR', pos: new Vector3(-2.0, 3.5, 3.0), k: 150000, c: 150000 }
-        ];
+        const gears = this.groundInteractionService.getContactPoints(
+            this.aircraft.gearHeight, this.controls.gear > 0.5, this.aircraft.gearStiffness
+        );
         
         let onGroundAny = false;
 
@@ -1424,7 +1437,10 @@ class RealisticFlightPhysicsService {
             // Apply suppression to Aerodynamic Moments (Wind + Control Surfaces)
             // We keep Pitch (My) active for rotation/flare
             Mx_aero *= stabilityFactor; 
-            Mz_aero *= stabilityFactor;
+            // Keep commanded rudder authority while damping wind-driven yaw near the ground.
+            const rudderDeflection = this.controls.rudder * (this.controlEffectiveness.rudder ?? 1);
+            const commandedRudderMoment = q * S * b * this.aircraft.Cdr * rudderDeflection;
+            Mz_aero = commandedRudderMoment + (Mz_aero - commandedRudderMoment) * stabilityFactor;
         }
 
         // --- Ground Stabilizer (Inertia-Based Damping & Roll Clamp) ---
@@ -1555,38 +1571,19 @@ class RealisticFlightPhysicsService {
         }
     }
 
-    checkConstraints() {
+    checkConstraints(dt = 1 / 60) {
+        const contact = this.groundInteractionService.resolveSurfaceContact(
+            this.state, this.currentGroundZ, this.aircraft.gearHeight, this.controls.gear > 0.5
+        );
+        this.onGround = contact.contact;
+        if (contact.contact && contact.sinkRate > 10 && !this.crashed) {
+            this.crashed = true;
+            this.crashReason = 'Hard Landing / Crash';
+        }
         // Crash Detection
         // Altitude AGL (Above Ground Level)
         const altitude = this.currentGroundZ - this.state.pos.z; 
         
-        // 1. Underground Check (Standard)
-        // User Request: "clamp aircraft to stay above ground for at least 0ft (except crashing)"
-        if (this.state.pos.z > this.currentGroundZ) {
-            // Check for Hard Landing / Crash
-            if (!this.crashed && this.state.vel.z > 10) { // > 10 m/s sink rate
-                 this.crashed = true;
-                 this.crashReason = "Hard Landing / Crash";
-            } 
-            
-            if (!this.crashed) {
-                // Hard Clamp to Surface
-                this.state.pos.z = this.currentGroundZ;
-                
-                // Stop downward velocity
-                if (this.state.vel.z > 0) this.state.vel.z = 0;
-                
-                // User Request: "place roll to 0 (but without stiff damping because they might overshoot)"
-                // We reset the roll directly in the quaternion state
-                const euler = this.state.quat.toEuler();
-                // Keep pitch (theta) and yaw (psi), force roll (phi) to 0
-                this.state.quat = Quaternion.fromEuler(0, euler.theta, euler.psi);
-                this.state.rates.x = 0; // Kill roll rate
-                
-                this.onGround = true;
-            }
-        }
-
         // 2. Obstacle Collision Check (New Safety Rules)
         // Rule: Safe at 0ft only on RUNWAY or GRASS. Unsafe (< 10ft) elsewhere.
         if (!this.crashed && altitude < 3.05) { // < 10 ft
@@ -1619,7 +1616,7 @@ class RealisticFlightPhysicsService {
             }
 
             if (groundStatus === 'OBJECTS' && !groundedTaxiLike && !validApproachCorridor) {
-                this.objectCollisionTimer += 0.016;
+                this.objectCollisionTimer += dt;
                 if (this.objectCollisionTimer >= 0.5) {
                     this.crashed = true;
                     this.crashReason = "Collision with Ground Objects";
@@ -1683,7 +1680,9 @@ class RealisticFlightPhysicsService {
             autopilot: {
                 engaged: autopilotStatus.engaged,
                 mode: autopilotStatus.mode,
-                targets: autopilotStatus.targets
+                targets: autopilotStatus.targets,
+                vnavArmed: autopilotStatus.vnavArmed,
+                autothrottleArmed: autopilotStatus.autothrottleArmed
             },
             autopilotTargets: autopilotStatus.targets,
             systems: this.systems,
@@ -1720,6 +1719,9 @@ class RealisticFlightPhysicsService {
         };
 
         const outputState = {
+            structural: this.structuralLimits.getSnapshot(),
+            groundTrack: Math.atan2(this.state.quat.rotate(this.state.vel).y,
+                this.state.quat.rotate(this.state.vel).x) * 180 / Math.PI,
             position: {
                 x: this.state.pos.x, // North
                 y: this.state.pos.y, // East
@@ -1850,6 +1852,11 @@ class RealisticFlightPhysicsService {
     }
     setAirBrakes(val) { this.controls.airBrakes = val; }
     setWheelBrakes(val) { this.controls.wheelBrakes = Math.max(0, Math.min(1, Number.isFinite(val) ? val : 0)); }
+    setToeBrakes(val) {
+        const pressure = Math.max(0, Math.min(1, Number.isFinite(val) ? val : 0));
+        this.toeBrakePressure = pressure;
+        this.setWheelBrakes(this.systems?.brakes?.parkingBrake ? 1 : pressure);
+    }
     setTrim(val) { this.controls.trim = val; }
     setAutopilot(engaged, targets) {
         if (this.aircraft?.scenarioRestrictions?.autopilotForbidden && engaged) {
@@ -2009,7 +2016,7 @@ class RealisticFlightPhysicsService {
             if (action === 'parkingBrake') {
                 const nextValue = value !== undefined ? !!value : !this.systems.brakes.parkingBrake;
                 this.systems.brakes.parkingBrake = nextValue;
-                this.controls.wheelBrakes = nextValue ? 1 : 0;
+                this.controls.wheelBrakes = nextValue ? 1 : (this.toeBrakePressure ?? 0);
             } else if (action === 'autobrake') {
                 this.systems.brakes.autobrake = value ?? this.systems.brakes.autobrake;
             } else {
@@ -2197,7 +2204,8 @@ class RealisticFlightPhysicsService {
             this.runwayGeometry,
             this.onGround,
             this.groundStatus,
-            this.difficulty
+            this.difficulty,
+            this.controls.rudder
         );
     }
 
@@ -2311,6 +2319,7 @@ class RealisticFlightPhysicsService {
      */
     setInitialConditions(conditions) {
         if (!conditions) return;
+        this.toeBrakePressure = 0;
 
         const hasKinematicResetFields = Boolean(
             conditions.position !== undefined ||
@@ -2810,11 +2819,23 @@ class RealisticFlightPhysicsService {
         this.autopilot.setTargets({ mode: mode });
     }
 
+    setVNAVArmed(armed) {
+        this.autopilot.setVNAVArmed(armed);
+        return this.getAutopilotStatus();
+    }
+
+    setAutothrottleArmed(armed) {
+        this.autopilot.setAutothrottleArmed(armed);
+        return this.getAutopilotStatus();
+    }
+
     getAutopilotStatus() {
         return {
             engaged: this.autopilot.engaged,
             mode: this.autopilot.mode,
             targets: this.autopilot.targets,
+            vnavArmed: this.autopilot.vnavArmed,
+            autothrottleArmed: this.autopilot.autothrottleArmed,
             fma: this.autopilot.fmaStatus || null,
             altitudeMode: this.autopilot.altitudeMode,
             userVsTarget: this.autopilot.userVsTarget
@@ -2842,6 +2863,7 @@ class RealisticFlightPhysicsService {
     }
 
     reset() {
+        this.toeBrakePressure = 0;
         const gearHeight = this.aircraft.gearHeight || 2;
         // Z is relative to Airport Elevation (Origin), so we just want to be gearHeight above 0
         const initialZ = -gearHeight;

@@ -84,6 +84,39 @@ test('Physics output exports authoritative IAS TAS and GS fields for downstream 
   assert.ok(Math.abs((state.trueAirspeed ?? 0) - (state.groundSpeed ?? 0)) > 10, 'Exported TAS and GS should diverge under runway wind');
 });
 
+test('At cruise altitude IAS falls well below TAS while AP receives IAS', async () => {
+  const physics = await createPhysics({ altitudeFt: 35000, speedKt: 450 });
+  const state = physics.getOutputState();
+  assert.ok(state.indicatedAirspeed < state.trueAirspeed * 0.65,
+    `Expected cruise IAS below TAS, got ${state.indicatedAirspeed} and ${state.trueAirspeed}`);
+  assert.ok(Math.abs(state.groundSpeed - state.trueAirspeed) < 1,
+    'Without wind, GS and TAS should be similar');
+
+  let apInput;
+  const updateAutopilot = physics.autopilot.update.bind(physics.autopilot);
+  physics.autopilot.update = (input, controls, dt) => {
+    apInput = input;
+    return updateAutopilot(input, controls, dt);
+  };
+  physics.update({ throttle: 0.5, pitch: 0, roll: 0, yaw: 0, trim: 0, flaps: 0, gear: false }, SIM_DT);
+  assert.ok(Math.abs(apInput.airspeed - physics.calculateAirspeeds().indicatedAirspeed) < 5,
+    'Autopilot must receive IAS in knots');
+  assert.ok(apInput.airspeed < state.trueAirspeed * 0.65);
+});
+
+test('Warm-weather climb keeps IAS below TAS as density falls with altitude', async () => {
+  const physics = await createPhysics({ altitudeFt: 0, speedKt: 250 });
+  physics.setEnvironment({ temperature: 35, windSpeed: 0, windGust: 0, windShear: 0 });
+  let previousIas = Infinity;
+  for (const altitudeFt of [0, 1000, 3000, 5000, 10000]) {
+    physics.setInitialConditions({ altitude: altitudeFt, speed: 250, coldStart: false });
+    const { indicatedAirspeed: ias, trueAirspeed: tas } = physics.getOutputState();
+    assert.ok(ias <= tas + 0.1, `IAS ${ias} exceeded TAS ${tas} at ${altitudeFt} ft`);
+    assert.ok(ias <= previousIas + 0.1, `IAS rose during climb to ${altitudeFt} ft`);
+    previousIas = ias;
+  }
+});
+
 test('Autopilot engagement does not create a large first-frame bank or pitch jump', async () => {
   const physics = await createPhysics({ altitudeFt: 6000, heading: 90, speedKt: 180 });
   runSteps(physics, { throttle: 0.52, pitch: 0.06, roll: 0.04, yaw: 0, trim: 0.05, flaps: 0, gear: false }, 60);

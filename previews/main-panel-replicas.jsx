@@ -1,6 +1,13 @@
 /* eslint-disable react/prop-types */
+import { useState } from 'react';
 import { InstrumentDataContext, useInstrumentData, routeGeometry, Label, Screw, Plate, Knob, Push, Toggle, Dial, LivePFD as PFD, ND } from './main-panel-parts.jsx';
 import AdditionalPanel from './main-panel-additional-replicas.jsx';
+import { replicaTargets } from '../src/utils/replicaAutopilot.js';
+import ReplicaAutopilotDial from '../src/components/ReplicaAutopilotDial.jsx';
+
+function AutopilotPush({ x, y, w, h, label, active, onActivate }) {
+  return <g onClick={onActivate} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') onActivate(); }} role="button" tabIndex={0} aria-label={label} aria-pressed={active} style={{ cursor: 'pointer' }}><Push implemented x={x} y={y} w={w} h={h} label={label} lit={active}/><path d={`M${x+2} ${y+2}H${x+w-2}`} stroke="#d2d6d1" strokeWidth=".6"/><path d={`M${x+2} ${y+h-1}H${x+w-2}`} stroke="#080b0d" strokeWidth="1"/><rect x={x} y={y} width={w} height={h} fill="transparent"/></g>;
+}
 
 const seq = n => Array.from({ length: n }, (_, i) => i);
 const MODELS = {
@@ -62,11 +69,30 @@ function EFIS({ x,y,w=89,airbus=false }) {
 
 function BoeingMCP({ x=410,y=17,w=375,classic=false }) {
   const d=useInstrumentData();
-  const speed=String(Math.round(d.targetIas ?? 250)); const hdg=String(Math.round(d.heading ?? 175)).padStart(3,'0'); const vs=String(Math.round(d.targetVerticalSpeed ?? 2000)); const alt=String(Math.round(d.targetAltitude ?? 3000)).padStart(5,'0');
+  const [channel,setChannel]=useState('A');
+  const targets=replicaTargets(d); const action=d.onAutopilotAction;
+  const activateChannel=(kind,letter)=>{
+    if(d.autopilot&&channel===letter&&(kind==='CWS'?d.autopilotMode==='CWS':d.autopilotMode!=='CWS')){action?.('toggle-autopilot');return;}
+    setChannel(letter);
+    if(kind==='CWS'){
+      action?.('set-autopilot-mode','CWS');
+      action?.('set-autopilot-targets',{ias:d.ias||targets.ias,heading:d.heading||targets.heading,altitude:d.altitude||targets.altitude,vs:d.verticalSpeed||0});
+    }else if(d.autopilotMode==='CWS') action?.('set-autopilot-mode','HDG');
+    if(!d.autopilot) action?.('toggle-autopilot');
+  };
+  const speed=String(Math.round(targets.ias)); const hdg=String(Math.round(targets.heading)).padStart(3,'0'); const vs=String(Math.round(targets.vs)); const alt=String(Math.round(targets.altitude)).padStart(5,'0');
   const entries = classic ? [['NAV','116.80'],['CRS','088'],['IAS/MACH',speed],['HDG',hdg],['VERT SPD',vs],['ALTITUDE',alt],['NAV','116.80'],['CRS','088']] : [['IAS/MACH',speed],['HDG',hdg],['VERT SPD',vs],['ALTITUDE',alt]];
   return <Plate x={x} y={y} w={w} h={62}>
-    {entries.map(([t,v],i)=>{const a=10+i*(w-20)/entries.length;return <g key={i}><Label x={a+16} y="8" className="tiny">{t}</Label><rect x={a} y="12" width="34" height="11" rx="1" fill="#171b19"/><Label x={a+17} y="21" className="digits" style={{fontSize:9}}>{v}</Label><Knob x={a+17} y={37} r={6}/>{!classic?<><Push x={a+39} y={12} w={17} h={10} label={['LNAV','VNAV','V/S','HOLD'][i]} lit={i<2}/><Push x={a+39} y={25} w={17} h={10} label={['SPD','SEL','APP','CMD'][i]}/><Push x={a+39} y={38} w={17} h={9} label="SEL"/></>:<><Push x={a+36} y={12} w={10} h={8} label="SEL"/><Push x={a+36} y={23} w={10} h={8} label="HLD"/><Toggle x={a+39} y={41}/></>}</g>;})}
-    {['A/T ARM','VNAV','LNAV','FLCH','HDG SEL','V/S','ALT HOLD','LOC','APP','CMD L','CMD C','CMD R'].map((t,i)=><Push key={t} x={7+i*(w-13)/12} y={51} w={(w-24)/12} h={7} label={t} lit={[1,2,9].includes(i)}/>)}
+    {entries.map(([t,v],i)=>{const a=10+i*(w-20)/entries.length;const field=t==='IAS/MACH'?'ias':t==='HDG'?'heading':t==='VERT SPD'?'vs':t==='ALTITUDE'?'altitude':null;return <g key={i}><Label x={a+16} y="8" className="tiny">{t}</Label><rect x={a} y="12" width="34" height="11" rx="1" fill="#171b19"/><Label x={a+17} y="21" className="digits" style={{fontSize:9}}>{v}</Label>{field?<ReplicaAutopilotDial x={a+17} y={37} r={6} field={field} targets={targets} onChange={next=>action?.('set-autopilot-targets',next)}/>:<Knob x={a+17} y={37} r={6}/>}</g>;})}
+    <AutopilotPush x={7} y={51} w={29} h={9} label="HDG SEL" active={d.autopilotMode==='HDG'} onActivate={()=>action?.('set-autopilot-mode','HDG')}/>
+    <AutopilotPush x={40} y={51} w={24} h={9} label="LNAV" active={d.autopilotMode==='LNAV'} onActivate={()=>action?.('set-autopilot-mode','LNAV')}/>
+    <AutopilotPush x={68} y={51} w={24} h={9} label="APP" active={d.autopilotMode==='ILS'} onActivate={()=>action?.('set-autopilot-mode','ILS')}/>
+    <AutopilotPush x={96} y={51} w={24} h={9} label="VNAV" active={d.vnavArmed} onActivate={()=>action?.('toggle-vnav')}/>
+    <AutopilotPush x={124} y={51} w={24} h={9} label="A/T" active={d.autothrottleArmed} onActivate={()=>action?.('toggle-autothrottle-arm')}/>
+    <AutopilotPush x={152} y={51} w={24} h={9} label="CMD A" active={d.autopilot&&d.autopilotMode!=='CWS'&&channel==='A'} onActivate={()=>activateChannel('CMD','A')}/>
+    <AutopilotPush x={180} y={51} w={24} h={9} label="CMD B" active={d.autopilot&&d.autopilotMode!=='CWS'&&channel==='B'} onActivate={()=>activateChannel('CMD','B')}/>
+    <AutopilotPush x={208} y={51} w={24} h={9} label="CWS A" active={d.autopilot&&d.autopilotMode==='CWS'&&channel==='A'} onActivate={()=>activateChannel('CWS','A')}/>
+    <AutopilotPush x={236} y={51} w={24} h={9} label="CWS B" active={d.autopilot&&d.autopilotMode==='CWS'&&channel==='B'} onActivate={()=>activateChannel('CWS','B')}/>
   </Plate>;
 }
 
@@ -81,9 +107,9 @@ function WarningWing({ x,y,flip=false }) {
 function Gear({ x,y,h=99 }) {
   const d=useInstrumentData();
   const leverY=d.gearDown === false ? 23 : h-16;
-  return <g transform={`translate(${x} ${y})`} data-component="landing-gear-lever">
+  return <g transform={`translate(${x} ${y})`} data-component="landing-gear-lever" role="button" tabIndex={0} aria-label="Toggle landing gear" onClick={()=>d.onAutopilotAction?.('gear', !d.gearDown)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();d.onAutopilotAction?.('gear', !d.gearDown);}}} style={{cursor:'pointer'}}>
     <Label x="17" y="0" className="tiny">LANDING GEAR</Label><rect x="12" y="10" width="9" height={h-13} rx="4" fill="#272d2b" stroke="#b5b2a0"/>
-    <Label x="3" y="20" className="tiny">UP</Label><Label x="0" y={h/2} className="tiny">OFF</Label><Label x="1" y={h-6} className="tiny">DN</Label>
+    <Label x="3" y="20" className="tiny">UP</Label><Label x="0" y={h/2} className="tiny">INOP</Label><Label x="1" y={h-6} className="tiny">DN</Label>
     <path d={`M17 ${leverY}v-14l9-7`} stroke="#b9bbb0" strokeWidth="5" fill="none"/><ellipse cx="26" cy={leverY-21} rx="6" ry="12" fill="url(#knob)" stroke="#55594f"/>
   </g>;
 }
@@ -202,13 +228,19 @@ function Panel757() {
 
 function AirbusFCU() {
   const d=useInstrumentData();
-  const fcuValues=[['SPD',Math.round(d.targetIas ?? 100)],['HDG',String(Math.round(d.heading ?? 0)).padStart(3,'0')],['ALT',String(Math.round(d.targetAltitude ?? 100)).padStart(5,'0')],['V/S',Math.round(d.targetVerticalSpeed ?? 0)]];
+  const targets=replicaTargets(d); const action=d.onAutopilotAction;
+  const fcuValues=[['SPD',Math.round(targets.ias),'ias'],['HDG',String(Math.round(targets.heading)).padStart(3,'0'),'heading'],['ALT',String(Math.round(targets.altitude)).padStart(5,'0'),'altitude'],['V/S',Math.round(targets.vs),'vs']];
   return <Plate x={377} y={23} w={447} h={66}>
     {[20,427].map(a=><g key={a}><rect x={a-13} y="12" width="26" height="11" fill="#151f24"/><Label x={a} y="21" className="digits">1013</Label><Knob x={a} y={40} r={8}/><Label x={a} y="58" className="tiny">QNH</Label></g>)}
     {[58,96,350,390].map((a,i)=><g key={a}><Label x={a} y="24" className="tiny">{i%2?'10 20 40 80':'ROSE ARC PLAN'}</Label><Knob x={a} y={38} r={9}/><Toggle x={a} y={56}/></g>)}
     {[46,338].map(a=><g key={a}>{['CSTR','WPT','VOR','NDB','ARPT'].map((t,i)=><Push key={t} x={a+i*12} y={8} w={11} h={7} label={t}/>)}</g>)}
-    {fcuValues.map(([t,v],i)=><g key={t}><Label x={139+i*53} y="11" className="tiny">{t}</Label><rect x={121+i*53} y="16" width="39" height="12" fill="#182125"/><Label x={141+i*53} y="25" className="digits">{v}</Label><Knob x={140+i*53} y={44} r={9}/></g>)}
-    {['AP1','AP2','A/THR','LOC','EXPED','APPR'].map((t,i)=><Push key={t} x={117+i*35} y={57} w={29} h={6} label={t}/>)}
+    {fcuValues.map(([t,v,field],i)=><g key={t}><Label x={139+i*53} y="11" className="tiny">{t}</Label><rect x={121+i*53} y="16" width="39" height="12" fill="#182125"/><Label x={141+i*53} y="25" className="digits">{v}</Label><ReplicaAutopilotDial x={140+i*53} y={44} r={9} field={field} targets={targets} onChange={next=>action?.('set-autopilot-targets',next)}/></g>)}
+    <AutopilotPush x={117} y={57} w={29} h={6} label="AP1" active={d.autopilot} onActivate={()=>action?.('toggle-autopilot')}/>
+    <AutopilotPush x={152} y={57} w={29} h={6} label="HDG" active={d.autopilotMode==='HDG'} onActivate={()=>action?.('set-autopilot-mode','HDG')}/>
+    <AutopilotPush x={187} y={57} w={29} h={6} label="NAV" active={d.autopilotMode==='LNAV'} onActivate={()=>action?.('set-autopilot-mode','LNAV')}/>
+    <AutopilotPush x={222} y={57} w={29} h={6} label="APPR" active={d.autopilotMode==='ILS'} onActivate={()=>action?.('set-autopilot-mode','ILS')}/>
+    <AutopilotPush x={257} y={56} w={29} h={9} label="VNAV" active={d.vnavArmed} onActivate={()=>action?.('toggle-vnav')}/>
+    <AutopilotPush x={292} y={56} w={29} h={9} label="A/THR" active={d.autothrottleArmed} onActivate={()=>action?.('toggle-autothrottle-arm')}/>
   </Plate>;
 }
 

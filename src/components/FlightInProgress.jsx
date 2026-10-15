@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, startTransition } from 'react';
+import useFlightKeyboard from '../hooks/useFlightKeyboard.js';
+import { flightKeyboardHelp } from '../config/flightKeyboard.js';
 import { useAircraftPhysics } from '../hooks/useAircraftPhysics';
 import { useLanguage } from '../contexts/LanguageContext';
 import { updateWeather } from '../services/weatherService';
@@ -8,9 +10,12 @@ import { terrainRadarService } from '../services/TerrainRadarService';
 import { airportService } from '../services/airportService';
 import weatherConfig from '../config/weatherConfig.json';
 import FlightPanelModular from './FlightPanelModular';
+import OutsideFlightView from './OutsideFlightView';
+import { readVisualQuality, writeVisualQuality } from '../utils/visualQualityPreference.js';
 import DebugPhysicsPanel from './DebugPhysicsPanel';
 import FailureDebugPanel from './FailureDebugPanel';
 import sceneManager from '../services/sceneManager.js';
+import { sceneProgressionEnabled } from '../config/sceneProgression.js';
 import eventBus from '../services/eventBus';
 import { getRunwayHeading } from '../utils/routeGenerator';
 import {
@@ -29,7 +34,6 @@ import { evaluateNormalChecklist, resolveAbnormalChecklist } from '../services/a
 import { buildNPCSystemSnapshot, formatNPCSystemReport } from '../services/autoflight/NPCReportingService.js';
 import { aviationInterceptService } from '../services/aviationIntercept/AviationInterceptService.js';
 import { npcCrewService } from '../services/NPCCrewService';
-import CrewPanel from './CrewPanel';
 import TutorialOverlay from './TutorialOverlay';
 import MultiplayerTrafficPanel from './MultiplayerTrafficPanel.jsx';
 import usePhysicsMotionControl from '../hooks/flight/usePhysicsMotionControl.js';
@@ -40,7 +44,7 @@ import { multiplayerSessionService } from '../services/multiplayer/MultiplayerSe
 import { trafficSyncService } from '../services/multiplayer/TrafficSyncService.js';
 import { playerSettingsService } from '../services/playerSettingsService.js';
 import { getNPCDifficultyProfile, getNPCResponseDelay, shouldNPCIntroduceNoise } from '../services/autoflight/NPCDifficultyProfile.js';
-import { getNPCQuickCommands, parseNPCCommand } from '../services/autoflight/NPCCommandService.js';
+import { parseNPCCommand } from '../services/autoflight/NPCCommandService.js';
 import { NPCOrderStatus, createNPCOrder, summarizeNPCOrder, transitionNPCOrder } from '../services/autoflight/NPCOrderService.js';
 
 const FlightInProgress = ({
@@ -320,6 +324,7 @@ const FlightInProgress = ({
     setFlaps,
     setAirBrakes,
     setWheelBrakes,
+    setToeBrakes,
     setGear,
     setTrim,
     performSystemAction,
@@ -331,6 +336,18 @@ const FlightInProgress = ({
     setEngineThrottle,
     setMotionEnabled
   } = useAircraftPhysics(aircraftConfig, false, physicsModel);
+
+  useFlightKeyboard({
+    aircraftModel, physicsService, enabled: isInitialized && !isCrashed,
+    controls: {
+      pitch: setPitch, roll: setRoll, yaw: setYaw, toeBrakes: setToeBrakes,
+      gear: setGear, flaps: setFlaps, throttle: setThrottle,
+      parkingBrake: value => {
+        performSystemAction?.('brakes', 'parkingBrake', value);
+        setWheelBrakes(value ? 1 : 0);
+      }
+    }
+  });
 
   const formatNumber = (value, digits = 0, suffix = '') => (
     Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : '---'
@@ -393,7 +410,6 @@ const FlightInProgress = ({
   const [narrative, setNarrative] = useState(null);
   const [activeFailures, setActiveFailures] = useState(sceneState?.activeFailures || []);
   const npcProfile = useMemo(() => getNPCDifficultyProfile(difficulty), [difficulty]);
-  const npcQuickCommands = useMemo(() => getNPCQuickCommands(), []);
 
   const appendCrewMessage = React.useCallback((content, overrides = {}) => {
     const payload = {
@@ -435,9 +451,13 @@ const FlightInProgress = ({
   });
   const [remoteTraffic, setRemoteTraffic] = useState([]);
   const [playerSettings, setPlayerSettings] = useState(playerSettingsService.defaults);
+  const [visualQuality, setVisualQuality] = useState(readVisualQuality);
   const [playerSettingsError, setPlayerSettingsError] = useState(null);
   const [playerSettingsLoaded, setPlayerSettingsLoaded] = useState(false);
-  const [activeFlightPlan, setActiveFlightPlan] = useState(flightPlan);
+  const [activeFlightPlan, setActiveFlightPlan] = useState(() => ({
+    ...(flightPlan || {}),
+    waypoints: activeRouteWaypoints
+  }));
   const [autoSaveStatus, setAutoSaveStatus] = useState({
     isSaving: false,
     lastSavedAt: null,
@@ -812,12 +832,13 @@ const FlightInProgress = ({
   useEffect(() => {
     // Only update if the plan actually changed content-wise to prevent object identity loops
     setActiveFlightPlan(prev => {
-        if (JSON.stringify(prev) !== JSON.stringify(flightPlan)) {
-            return flightPlan;
+        const planningPlan = { ...(flightPlan || {}), waypoints: activeRouteWaypoints };
+        if (JSON.stringify(prev) !== JSON.stringify(planningPlan)) {
+            return planningPlan;
         }
         return prev;
     });
-  }, [flightPlan]);
+  }, [flightPlan, activeRouteWaypoints]);
   
   // Handle Flight Plan Update
    const handleUpdateFlightPlan = (newPlan) => {
@@ -983,6 +1004,7 @@ const FlightInProgress = ({
       setActiveFailures(state.activeFailures);
     },
     [eventBus.Types.PHYSICS_INITIALIZE]: (payload) => {
+      if (!sceneProgressionEnabled) return;
       const initialConditions = payload?.initialConditions;
       const hasDestructiveInitFields = Boolean(
         initialConditions && (
@@ -1566,12 +1588,6 @@ const FlightInProgress = ({
     return intent;
   }, [appendCrewMessage, executeNPCIntent, sceneState.sceneId, sceneState.scenarioId]);
 
-  const handleQuickNPCCommand = React.useCallback((command) => {
-    if (!command) return;
-    setCommandInput(command);
-    submitNPCCommand(command);
-  }, [submitNPCCommand]);
-
   const handleCommandSubmit = (event) => {
     event.preventDefault();
     const trimmed = commandInput.trim();
@@ -1815,6 +1831,18 @@ const FlightInProgress = ({
         </div>
       </div>
 
+      {sceneState.physicsActive && <OutsideFlightView
+        flightData={flightData}
+        weatherData={weatherData}
+        timeZulu={timeZulu}
+        timeScale={timeScale}
+        quality={visualQuality}
+        departure={selectedDeparture}
+        arrival={selectedArrival}
+        departureRunway={routeDetails?.departureRunway || flightPlan?.departure?.runways?.[0]?.name}
+        arrivalRunway={routeDetails?.landingRunway || flightPlan?.arrival?.runways?.[0]?.name}
+      />}
+
       <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
         {showFailurePanel && (
           <FailureDebugPanel
@@ -1850,12 +1878,10 @@ const FlightInProgress = ({
             </div>
           )}
 
-          <div style={{ pointerEvents: 'auto' }}>
-            <CrewPanel difficulty={difficulty} quickCommands={npcQuickCommands} onQuickCommand={handleQuickNPCCommand} />
-          </div>
         </div>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', zIndex: 10 }}>
+          <div style={{ padding: '4px 10px', background: '#111b25', color: '#b8c7d4', fontSize: '11px' }}>{flightKeyboardHelp}</div>
           <FlightPanelModular
             flightData={{
               ...flightData,
@@ -1888,6 +1914,8 @@ const FlightInProgress = ({
             autoSaveStatus={offlineMode ? { isSaving: false, lastSavedAt: null, saveError: null } : autoSaveStatus}
             ilsRunwayOptions={ilsRunwayOptions}
             onUpdatePlayerSettings={handlePlayerSettingsChange}
+            visualQuality={visualQuality}
+            onUpdateVisualQuality={(value) => setVisualQuality(writeVisualQuality(value))}
             onActionRequest={(action, payload, extra) => {
               const payloadStr = typeof payload === 'number' ? payload.toFixed(5) : JSON.stringify(payload);
               console.log(`📡 UI Action: ${action} = ${payloadStr}, Extra: ${extra}`);
@@ -1904,6 +1932,9 @@ const FlightInProgress = ({
                 case 'airBrakes':
                   handleAirBrakesControl(payload);
                   console.log(`📡 FlightPanel Action: ${action} = ${payload}`);
+                  break;
+                case 'toeBrakes':
+                  setToeBrakes(payload);
                   break;
                 case 'wheelBrakes':
                   handleWheelBrakesControl(payload);
@@ -1955,6 +1986,22 @@ const FlightInProgress = ({
                   console.log(`📡 FlightPanel Action: ${action} = ${payload}`);
                   break;
                 }
+                case 'toggle-vnav': {
+                  if (scenarioRestrictions.autopilotForbidden) break;
+                  if (physicsService?.setVNAVArmed) {
+                    const status = physicsService.getAutopilotStatus?.();
+                    physicsService.setVNAVArmed(!status?.vnavArmed);
+                  }
+                  break;
+                }
+                case 'toggle-autothrottle-arm': {
+                  if (scenarioRestrictions.autopilotForbidden) break;
+                  if (physicsService?.setAutothrottleArmed) {
+                    const status = physicsService.getAutopilotStatus?.();
+                    physicsService.setAutothrottleArmed(!status?.autothrottleArmed);
+                  }
+                  break;
+                }
                 case 'set-autopilot-targets': {
                   if (scenarioRestrictions.autopilotForbidden) {
                     console.warn('Autopilot targets are disabled for this challenge.');
@@ -1966,7 +2013,8 @@ const FlightInProgress = ({
                     const targets = {
                       altitude: payload.altitude, // ft
                       speed: payload.ias,         // kts
-                      vs: payload.vs              // ft/min
+                      vs: payload.vs,             // ft/min
+                      heading: payload.heading    // degrees
                     };
                     
                     physicsService.updateAutopilotTargets(targets);
@@ -2022,6 +2070,7 @@ const FlightInProgress = ({
                   break;
                 }
                 case 'skip-phase': {
+                  if (!sceneProgressionEnabled) break;
                   // Check if we can proceed (Hardcore modes only)
                   if ((difficulty === 'pro' || difficulty === 'devil') && !startupStatus.canContinue) {
                     const missing = startupStatus.missingItems.join(', ');

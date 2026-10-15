@@ -1,0 +1,228 @@
+.cockpit-controller {
+  --legend-font: 'DIN Condensed', 'DIN Alternate', 'Arial Narrow', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 6px;
+  margin: 10px auto;
+  color: #d5d3c4;
+  font: 10px var(--legend-font);
+  letter-spacing: .55px;
+}
+.cockpit-controller.airbus { --pedestal-metal: #4e5b61; }
+.cockpit-controller.boeing { --pedestal-metal: #585b52; }
+.pilot-controller, .center-pedestal {
+  position: relative;
+  padding: 12px;
+  border: 1px solid #151a1b;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(105deg, #ffffff02 0 1px, transparent 1px 3px),
+    linear-gradient(115deg, #72776b, var(--pedestal-metal) 24%, #3b4443 85%);
+  box-shadow: inset 0 1px 0 #b0b3a16b, inset 2px 0 0 #8e93885c,
+    inset -2px -3px 0 #1b2224, 0 4px 0 #161d1f, 0 7px 0 #343c3c,
+    0 9px 0 #101719, 0 14px 18px #0009;
+}
+.center-pedestal::before, .pilot-controller::before,
+.center-pedestal::after, .pilot-controller::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, transparent 40%, #161c1d 41% 57%, transparent 58%),
+    radial-gradient(circle at 30% 20%, #b1b6ab, #505956 65%, #232c2d);
+  border: 1px solid #242d2e;
+  box-shadow: 0 1px 1px #0009;
+}
+.center-pedestal::before, .pilot-controller::before { top: 4px; left: 4px; }
+.center-pedestal::after, .pilot-controller::after { bottom: 4px; right: 4px; }
+.control-legend, .mechanical-lever strong, .trim-wheel, .gate-mark {
+  font-family: var(--legend-font);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #d7d6c6;
+  text-shadow: 0 -1px 0 #192221, 0 1px 0 #ffffff17;
+}
+.pilot-controller { width: 174px; text-align: center; display: flex; flex-direction: column; }
+.column-well {
+  position: relative;
+  height: 174px;
+  margin: 0 0 8px;
+  background: radial-gradient(ellipse at 50% 90%, #12191b 0, #293234 45%, #57625f 85%);
+  border: 1px solid #252e2f;
+  border-radius: 3px;
+  box-shadow: inset 0 3px 9px #0008, 0 1px 0 #91978b50;
+  touch-action: none;
+  cursor: grab;
+  overflow: hidden;
+}
+.control-shaft {
+  position: absolute;
+  top: 80px;
+  bottom: -10px;
+  left: calc(50% - 14px);
+  width: 28px;
+  background: linear-gradient(90deg, #141a1d, #657270 35%, #3a4848 50%, #252c30 85%, #0e1416);
+  box-shadow: 5px 0 6px #0006;
+}
+.airbus .control-shaft { width: 50px; left: calc(50% - 25px); top: 136px; border-radius: 40%; }
+.pilot-grip {
+  position: absolute;
+  width: 166px;
+  height: 130px;
+  top: 12px;
+  left: 4px;
+  filter: drop-shadow(2px 7px 3px #000b);
+}
+.airbus .pilot-grip { top: 28px; }
+.control-lock { font-size: 8px; color: #dec389; margin-bottom: 5px; }
+.pedal-pair { display: flex; gap: 10px; margin-top: 6px; }
+.cockpit-controller .pedal-pair button {
+  flex: 1;
+  height: 37px;
+  background: repeating-linear-gradient(0deg, #242c2d 0 4px, #626c67 4px 5px, #182123 5px 7px);
+  border: 2px solid #2a3535;
+  box-shadow: inset 1px 1px 0 #91988b, 0 3px 0 #151d1f;
+}
+.pedestal-upper { display: flex; align-items: stretch; gap: 7px; }
+.quadrant {
+  display: flex;
+  justify-content: center;
+  padding: 7px 5px 5px;
+  border: 1px solid #111b1c;
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(90deg, #242e2e, #72786a 5%, #4a544e 12%, #60695d 85%, #25322e);
+  box-shadow: inset 0 2px 0 #a0a48a80, inset 0 -4px 0 #232e2b,
+    inset 4px 0 5px #101b1a66, inset -4px 0 5px #101b1a66, 0 4px 0 #1b2523;
+}
+.mechanical-lever { width: 67px; position: relative; text-align: center; }
+.mechanical-lever.thrust { width: 45px; }
+.mechanical-lever strong { font-size: 8px; letter-spacing: .75px; display: block; height: 10px; }
+.lever-gate { position: relative; height: 142px; margin: 5px 0 0; touch-action: none; cursor: grab; }
+.lever-slot {
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 18px;
+  width: 7px;
+  border: 1px solid #182321;
+  border-radius: 5px;
+  background: #080e10;
+  box-shadow: -1px 0 0 #919785, 1px 0 0 #939b8680, inset 2px 0 3px #000;
+}
+.gate-mark { position: absolute; left: 37px; font-size: 7px; letter-spacing: .2px; transform: translateY(-50%); white-space: nowrap; }
+.gate-mark::before { content: ''; position: absolute; width: 7px; height: 1px; background: #cccdbb; left: -9px; top: 4px; box-shadow: 0 -1px 0 #27342b; }
+.thrust .gate-mark { left: 33px; font-size: 6px; }
+.thrust + .thrust .gate-mark { visibility: hidden; }
+.lever-arm {
+  position: absolute;
+  left: 19px;
+  width: 7px;
+  height: 30px;
+  background: linear-gradient(90deg, #0c171a, #a6aea0 30%, #dae0ce 45%, #657267 58%, #273631);
+  border: 1px solid #1d2b26;
+  box-shadow: 3px 4px 3px #000a;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 2;
+}
+.lever-grip {
+  position: absolute;
+  bottom: 0;
+  left: -14px;
+  width: 33px;
+  height: 30px;
+  border: 1px solid #18221e;
+  border-radius: 5px 5px 8px 8px;
+  background: linear-gradient(180deg, #e4e3cd 0, #c9cbb5 12%, #a1aa91 55%, #7b876e 75%, #404f40 78%, #59674e 100%);
+  box-shadow: inset 1px 1px 0 #fbf6dc, inset -2px 0 0 #5c695b,
+    1px 4px 0 #29362a, 2px 6px 1px #111c17, 4px 9px 5px #000a;
+  color: #273325;
+  text-shadow: 0 1px 0 #e5e6cc;
+  font: 700 12px var(--legend-font);
+  display: grid;
+  place-items: center;
+}
+.speedbrake .lever-grip {
+  width: 27px;
+  left: -11px;
+  height: 27px;
+  background: repeating-linear-gradient(180deg, transparent 0 5px, #0d181a66 5px 6px), linear-gradient(#56605b, #172322 75%, #0f1b1b);
+  border-color: #101b1b;
+  box-shadow: inset 1px 1px 0 #828c7c, 1px 4px 0 #0e1918, 3px 7px 4px #000a;
+}
+.flaps .lever-grip {
+  width: 38px;
+  height: 21px;
+  left: -17px;
+  border-radius: 2px 2px 8px 8px;
+  background: linear-gradient(#e2e3cf, #b9bfaa 55%, #929e87 56%, #596852);
+  box-shadow: inset 0 1px 0 #f9f7df, 0 4px 0 #65715c, 1px 6px 0 #293728, 3px 8px 4px #0009;
+}
+.mechanical-lever output { position: absolute; bottom: 3px; left: 0; right: 0; font: 8px var(--legend-font); }
+.pedestal-accessories { display: flex; gap: 6px; justify-content: flex-end; align-items: center; padding: 9px 0 6px; }
+.cockpit-controller button {
+  font: 600 8px var(--legend-font);
+  letter-spacing: .65px;
+  cursor: pointer;
+  color: #d6d5c3;
+  text-shadow: 0 -1px 0 #111a18;
+  border: 1px solid #1c2927;
+  background: linear-gradient(#586356, #343f37 22%, #202c26);
+  padding: 7px;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 #a0a88e6b, 0 2px 0 #111c18, 1px 3px 3px #0006;
+}
+.cockpit-controller button:disabled { cursor: default; }
+.cockpit-controller .inop { color: #dcc08b; }
+.cockpit-controller .parking-handle { position: relative; padding-left: 42px; text-align: left; min-height: 37px; background: #36423a; }
+.parking-pull { position: absolute; top: 7px; left: 11px; width: 23px; height: 13px; border-radius: 3px; background: linear-gradient(#59625a, #1f2a24 45%, #101b18 80%); border: 1px solid #101b17; box-shadow: inset 0 1px 0 #9ea38c, 1px 4px 0 #15201a, 3px 6px 3px #0008; }
+.parking-pull::after { content: ''; position: absolute; top: 17px; left: 10px; width: 4px; height: 5px; background: linear-gradient(90deg, #405345, #bac1a6, #3c4c3d); }
+.parking-handle.set .parking-pull { top: 3px; }
+.parking-handle.set { color: #dfbd84; }
+.trim-wheel { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; width: 39px; font-size: 7px; letter-spacing: .4px; }
+.cockpit-controller .mechanical-trim-wheel {
+  position: relative;
+  width: 38px;
+  height: 112px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  overflow: visible;
+  touch-action: none;
+  cursor: grab;
+}
+.mechanical-trim-wheel .trim-wheel-disc {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 90px;
+  height: 90px;
+  border: 6px solid #18271d;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: repeating-conic-gradient(#818c75 0deg 5deg, #293e2c 5deg 10deg);
+  box-shadow: inset 0 0 0 4px #79866b, inset 0 0 0 9px #243526, 8px 2px 0 #101f16, 12px 4px 8px #0009;
+  pointer-events: none;
+}
+.trim-wheel-disc::before { content: ''; position: absolute; inset: 16px; border: 5px solid #819076; border-radius: 50%; background: #243627; }
+.trim-wheel-disc::after { content: ''; position: absolute; inset: 32px; border-radius: 50%; background: #a6b095; border: 2px solid #16261b; }
+.trim-wheel-disc i { position: absolute; left: 35px; top: 0; width: 5px; height: 75px; background: linear-gradient(#e5e4cd 0 25%, #6a7c5e 25% 75%, #e5e4cd 75%); }
+.cockpit-controller .reverser-handle { position:absolute; top:-8px; left:-9px; width:25px; height:10px; padding:0; font:600 6px var(--legend-font); color:#273325; text-shadow:0 1px #d7dcc5; letter-spacing:.2px; border:1px solid #26362a; background:linear-gradient(#d0d5bb,#7d8c6a); box-shadow:0 2px 0 #253427; border-radius:2px; pointer-events:auto; }
+.cockpit-controller .reverser-handle.deployed { top:-12px; color:#ead1a4; background:linear-gradient(#616e57,#2a392c); text-shadow:0 -1px #111b17; box-shadow:0 5px 0 #243226; }
+.cockpit-controller .reverser-handle:disabled { color:#dcc08b; background:#26352b; text-shadow:none; }
+.cockpit-controller .thrust-sync { display:flex; align-items:center; gap:6px; min-height:37px; }
+.sync-toggle { position:relative; display:block; width:9px; height:20px; border-radius:6px; background:#122219; border:1px solid #7b886a; box-shadow:inset 0 2px 2px #000a; }
+.sync-toggle::after { content:''; position:absolute; width:9px; height:12px; left:-1px; top:8px; border:1px solid #253529; border-radius:2px; background:linear-gradient(90deg,#5d7158,#bcc5a1,#465a40); box-shadow:1px 2px 2px #0008; }
+.linked .sync-toggle::after { top:-1px; }
+.radio-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 7px; border: 1px solid #1c2b26; background: #303c34; box-shadow: inset 0 1px 0 #9ba38b50; font-size: 7px; }
+.radio-panel label { display: flex; align-items: center; gap: 6px; }
+.radio-panel input { width: 65px; background: #0d1714; color: #d7dcb5; border: 1px solid #14231a; border-radius: 1px; box-shadow: inset 0 2px 3px #000b, 0 1px 0 #9da48b55; padding: 4px; font: 12px 'SFMono-Regular', Consolas, monospace; letter-spacing: .2px; }
+.radio-panel button { padding: 5px; font-size: 7px; }
+.cockpit-controller :focus-visible { outline: 2px solid #edcf77; outline-offset: 3px; }
+@media (max-width: 760px) {
+  .cockpit-controller { flex-wrap: wrap; }
+  .center-pedestal { max-width: 100%; box-sizing: border-box; overflow-x: auto; }
+}
