@@ -1,0 +1,78 @@
+[
+  {
+    "file": "world-aip-1.1.0.zip",
+    "name": "World AIP airports and routes",
+    "version": "1.1.0",
+    "bytes": 12660307,
+    "sourceTables": {
+      "aip_airports.csv": {
+        "table": "skylinetragedy_aip_airports",
+        "rows": 85484,
+        "bytes": 12640740
+      },
+      "aip_runways.csv": {
+        "table": "skylinetragedy_aip_runways",
+        "rows": 47951,
+        "bytes": 3949099
+      },
+      "aip_frequencies.csv": {
+        "table": "skylinetragedy_aip_frequencies",
+        "rows": 30279,
+        "bytes": 1296706
+      },
+      "aip_navaids.csv": {
+        "table": "skylinetragedy_aip_navaids",
+        "rows": 11010,
+        "bytes": 1525245
+      },
+      "aip_regions.csv": {
+        "table": "skylinetragedy_aip_regions",
+        "rows": 10,
+        "bytes": 2999
+      },
+      "aip_raw_sources.csv": {
+        "table": "skylinetragedy_aip_raw_sources",
+        "rows": 16,
+        "bytes": 2571
+      },
+      "aip_route_catalog.csv": {
+        "table": "skylinetragedy_aip_route_catalog",
+        "rows": 2465,
+        "bytes": 627132
+      },
+      "aip_route_airport_index.csv": {
+        "table": "skylinetragedy_aip_route_airport_index",
+        "rows": 13616,
+        "bytes": 1030101
+      },
+      "aip_route_lookup_index.csv": {
+        "table": "skylinetragedy_aip_route_lookup_index",
+        "rows": 11968,
+        "bytes": 690836
+      },
+      "aip_route_tokens.csv": {
+        "table": "skylinetragedy_aip_route_tokens",
+        "rows": 33199,
+        "bytes": 1476672
+      },
+      "aip_route_legs.csv": {
+        "table": "skylinetragedy_aip_route_legs",
+        "rows": 18836,
+        "bytes": 885219
+      },
+      "aip_route_edge_index.csv": {
+        "table": "skylinetragedy_aip_route_edge_index",
+        "rows": 18836,
+        "bytes": 1085976
+      },
+      "aip_reference_points.csv": {
+        "table": "skylinetragedy_aip_reference_points",
+        "rows": 22337,
+        "bytes": 3251624
+      }
+    },
+    "airports": 85484,
+    "navaids": 11010,
+    "sha256": "c6d988d5bc57387f971a180981dc62689f482d2ca9cce972ec928ac920b148e3"
+  }
+]

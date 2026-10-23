@@ -269,3 +269,33 @@ test('engine start switch stays in GRD without electrical power for ignition', (
 
 after(() => {
 });
+
+
+test('scenario initialization activates total hydraulic loss across every circuit', () => {
+  const service = new RealisticFlightPhysicsService({ ...aircraft, hydraulicCount: 4, scenarioMode: true });
+  service.setInitialConditions({ altitude: 16000, speed: 230, difficulty: 'devil',
+    failureType: 'major_hydraulic_failure', failureContext: { totalHydraulicLoss: true } });
+  assert.ok(service.failureSystem.activeFailures.has('major_hydraulic_failure'));
+  for (let i = 0; i < 12; i++) {
+    service.failureSystem.update(1, service.getOutputState());
+    service.failureSystem.applyImpact(service);
+    for (const circuit of Object.values(service.systems.hydraulics)) {
+      circuit.engPump = true;
+      circuit.elecPump = true;
+    }
+    service.updateSystems(1);
+    for (const circuit of Object.values(service.systems.hydraulics)) {
+      assert.equal(circuit.pressure, 0);
+      assert.equal(circuit.qty, 0);
+    }
+  }
+  assert.ok(!service.systems.resourceNetwork.resources.includes('hydraulic_A'));
+  assert.ok(!service.systems.resourceNetwork.resources.includes('hydraulic_B'));
+});
+
+test('scenario initialization activates all engine failure immediately', () => {
+  const service = new RealisticFlightPhysicsService({ ...aircraft, scenarioMode: true });
+  service.setInitialConditions({ altitude: 17000, speed: 250, difficulty: 'devil', failureType: 'dual_engine_failure' });
+  assert.ok(service.failureSystem.activeFailures.has('dual_engine_failure'));
+  assert.ok(service.engines.every(engine => engine.state.failed));
+});

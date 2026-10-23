@@ -1,0 +1,1502 @@
+{
+  "KATL": {
+    "latitude": 33.6367,
+    "longitude": -84.428101,
+    "elevation": 1026.0,
+    "bbox": [
+      33.5417,
+      -84.54221,
+      33.7317,
+      -84.314
+    ],
+    "iata": "ATL",
+    "name": "Hartsfield Jackson Atlanta International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KLAX": {
+    "latitude": 33.942501,
+    "longitude": -118.407997,
+    "elevation": 125.0,
+    "bbox": [
+      33.8475,
+      -118.52251,
+      34.0375,
+      -118.29348
+    ],
+    "iata": "LAX",
+    "name": "Los Angeles International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KORD": {
+    "latitude": 41.9786,
+    "longitude": -87.9048,
+    "elevation": 680.0,
+    "bbox": [
+      41.8836,
+      -88.03259,
+      42.0736,
+      -87.77701
+    ],
+    "iata": "ORD",
+    "name": "Chicago O'Hare International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KDFW": {
+    "latitude": 32.896801,
+    "longitude": -97.038002,
+    "elevation": 607.0,
+    "bbox": [
+      32.8018,
+      -97.15114,
+      32.9918,
+      -96.92486
+    ],
+    "iata": "DFW",
+    "name": "Dallas Fort Worth International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "CYVR": {
+    "latitude": 49.193901,
+    "longitude": -123.183998,
+    "elevation": 14.0,
+    "bbox": [
+      49.0989,
+      -123.32937,
+      49.2889,
+      -123.03863
+    ],
+    "iata": "YVR",
+    "name": "Vancouver International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "CYYZ": {
+    "latitude": 43.675935,
+    "longitude": -79.629421,
+    "elevation": 569.0,
+    "bbox": [
+      43.58094,
+      -79.76077,
+      43.77094,
+      -79.49807
+    ],
+    "iata": "YYZ",
+    "name": "Toronto Pearson International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "MMMX": {
+    "latitude": 19.435822,
+    "longitude": -99.07033,
+    "elevation": 7316.0,
+    "bbox": [
+      19.34082,
+      -99.17107,
+      19.53082,
+      -98.96959
+    ],
+    "iata": "MEX",
+    "name": "Mexico City Benito Ju\u00e1rez International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KDEN": {
+    "latitude": 39.860027,
+    "longitude": -104.673792,
+    "elevation": 5431.0,
+    "bbox": [
+      39.76503,
+      -104.79755,
+      39.95503,
+      -104.55003
+    ],
+    "iata": "DEN",
+    "name": "Denver International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KJFK": {
+    "latitude": 40.639447,
+    "longitude": -73.779317,
+    "elevation": 13.0,
+    "bbox": [
+      40.54445,
+      -73.90451,
+      40.73445,
+      -73.65412
+    ],
+    "iata": "JFK",
+    "name": "John F. Kennedy International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KSFO": {
+    "latitude": 37.619806,
+    "longitude": -122.374821,
+    "elevation": 13.0,
+    "bbox": [
+      37.52481,
+      -122.49476,
+      37.71481,
+      -122.25488
+    ],
+    "iata": "SFO",
+    "name": "San Francisco International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KSEA": {
+    "latitude": 47.447943,
+    "longitude": -122.310276,
+    "elevation": 433.0,
+    "bbox": [
+      47.35294,
+      -122.45075,
+      47.54294,
+      -122.1698
+    ],
+    "iata": "SEA",
+    "name": "Seattle\u2013Tacoma International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KLAS": {
+    "latitude": 36.083361,
+    "longitude": -115.151817,
+    "elevation": 2181.0,
+    "bbox": [
+      35.98836,
+      -115.26937,
+      36.17836,
+      -115.03427
+    ],
+    "iata": "LAS",
+    "name": "Harry Reid International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KMIA": {
+    "latitude": 25.796011,
+    "longitude": -80.289751,
+    "elevation": 8.0,
+    "bbox": [
+      25.70101,
+      -80.39527,
+      25.89101,
+      -80.18424
+    ],
+    "iata": "MIA",
+    "name": "Miami International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KIAH": {
+    "latitude": 29.9844,
+    "longitude": -95.3414,
+    "elevation": 97.0,
+    "bbox": [
+      29.8894,
+      -95.45108,
+      30.0794,
+      -95.23172
+    ],
+    "iata": "IAH",
+    "name": "George Bush Intercontinental Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KPHX": {
+    "latitude": 33.435302,
+    "longitude": -112.005905,
+    "elevation": 1135.0,
+    "bbox": [
+      33.3403,
+      -112.11974,
+      33.5303,
+      -111.89207
+    ],
+    "iata": "PHX",
+    "name": "Phoenix Sky Harbor International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KCLT": {
+    "latitude": 35.2140007019043,
+    "longitude": -80.94309997558594,
+    "elevation": 748.0,
+    "bbox": [
+      35.119,
+      -81.05938,
+      35.309,
+      -80.82682
+    ],
+    "iata": "CLT",
+    "name": "Charlotte Douglas International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KBOS": {
+    "latitude": 42.36197,
+    "longitude": -71.0079,
+    "elevation": 20.0,
+    "bbox": [
+      42.26697,
+      -71.13647,
+      42.45697,
+      -70.87933
+    ],
+    "iata": "BOS",
+    "name": "Boston Logan International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KEWR": {
+    "latitude": 40.6894,
+    "longitude": -74.170545,
+    "elevation": 18.0,
+    "bbox": [
+      40.5944,
+      -74.29583,
+      40.7844,
+      -74.04526
+    ],
+    "iata": "EWR",
+    "name": "Newark Liberty International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KDTW": {
+    "latitude": 42.21377,
+    "longitude": -83.353786,
+    "elevation": 645.0,
+    "bbox": [
+      42.11877,
+      -83.48205,
+      42.30877,
+      -83.22552
+    ],
+    "iata": "DTW",
+    "name": "Detroit Metropolitan Wayne County Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KMSP": {
+    "latitude": 44.880081,
+    "longitude": -93.221741,
+    "elevation": 841.0,
+    "bbox": [
+      44.78508,
+      -93.35581,
+      44.97508,
+      -93.08767
+    ],
+    "iata": "MSP",
+    "name": "Minneapolis\u2013Saint Paul International Airport / Wold\u2013Chamberlain Field",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KBWI": {
+    "latitude": 39.1754,
+    "longitude": -76.668297,
+    "elevation": 146.0,
+    "bbox": [
+      39.0804,
+      -76.79084,
+      39.2704,
+      -76.54575
+    ],
+    "iata": "BWI",
+    "name": "Baltimore/Washington International Thurgood Marshall Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KPHL": {
+    "latitude": 39.871899,
+    "longitude": -75.241096,
+    "elevation": 36.0,
+    "bbox": [
+      39.7769,
+      -75.36488,
+      39.9669,
+      -75.11731
+    ],
+    "iata": "PHL",
+    "name": "Philadelphia International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KSTL": {
+    "latitude": 38.748697,
+    "longitude": -90.370003,
+    "elevation": 618.0,
+    "bbox": [
+      38.6537,
+      -90.49181,
+      38.8437,
+      -90.24819
+    ],
+    "iata": "STL",
+    "name": "St. Louis Lambert International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KDCA": {
+    "latitude": 38.8521,
+    "longitude": -77.037697,
+    "elevation": 15.0,
+    "bbox": [
+      38.7571,
+      -77.15968,
+      38.9471,
+      -76.91571
+    ],
+    "iata": "DCA",
+    "name": "Ronald Reagan Washington National Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KIAD": {
+    "latitude": 38.9445,
+    "longitude": -77.455803,
+    "elevation": 312.0,
+    "bbox": [
+      38.8495,
+      -77.57795,
+      39.0395,
+      -77.33366
+    ],
+    "iata": "IAD",
+    "name": "Washington Dulles International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KMDW": {
+    "latitude": 41.785999,
+    "longitude": -87.752403,
+    "elevation": 620.0,
+    "bbox": [
+      41.691,
+      -87.87981,
+      41.881,
+      -87.625
+    ],
+    "iata": "MDW",
+    "name": "Chicago Midway International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KSLC": {
+    "latitude": 40.78886,
+    "longitude": -111.979866,
+    "elevation": 4227.0,
+    "bbox": [
+      40.69386,
+      -112.10534,
+      40.88386,
+      -111.85439
+    ],
+    "iata": "SLC",
+    "name": "Salt Lake City International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KCVG": {
+    "latitude": 39.048801,
+    "longitude": -84.667801,
+    "elevation": 896.0,
+    "bbox": [
+      38.9538,
+      -84.79013,
+      39.1438,
+      -84.54547
+    ],
+    "iata": "CVG",
+    "name": "Cincinnati Northern Kentucky International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KMCO": {
+    "latitude": 28.429399490356445,
+    "longitude": -81.30899810791016,
+    "elevation": 96.0,
+    "bbox": [
+      28.3344,
+      -81.41703,
+      28.5244,
+      -81.20097
+    ],
+    "iata": "MCO",
+    "name": "Orlando International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KFLL": {
+    "latitude": 26.072599,
+    "longitude": -80.152702,
+    "elevation": 9.0,
+    "bbox": [
+      25.9776,
+      -80.25846,
+      26.1676,
+      -80.04694
+    ],
+    "iata": "FLL",
+    "name": "Fort Lauderdale Hollywood International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "EGLL": {
+    "latitude": 51.470748,
+    "longitude": -0.459909,
+    "elevation": 83.0,
+    "bbox": [
+      51.37575,
+      -0.61242,
+      51.56575,
+      -0.3074
+    ],
+    "iata": "LHR",
+    "name": "London Heathrow Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LFPG": {
+    "latitude": 49.00896,
+    "longitude": 2.554117,
+    "elevation": 392.0,
+    "bbox": [
+      48.91396,
+      2.40929,
+      49.10396,
+      2.69895
+    ],
+    "iata": "CDG",
+    "name": "Charles de Gaulle International Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "EDDF": {
+    "latitude": 50.026706,
+    "longitude": 8.55835,
+    "elevation": 364.0,
+    "bbox": [
+      49.93171,
+      8.41047,
+      50.12171,
+      8.70623
+    ],
+    "iata": "FRA",
+    "name": "Frankfurt Main Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "EDDM": {
+    "latitude": 48.353802,
+    "longitude": 11.7861,
+    "elevation": 1487.0,
+    "bbox": [
+      48.2588,
+      11.64314,
+      48.4488,
+      11.92906
+    ],
+    "iata": "MUC",
+    "name": "Munich Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LSZH": {
+    "latitude": 47.458056,
+    "longitude": 8.548056,
+    "elevation": 1417.0,
+    "bbox": [
+      47.36306,
+      8.40755,
+      47.55306,
+      8.68856
+    ],
+    "iata": "ZRH",
+    "name": "Z\u00fcrich Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LIRF": {
+    "latitude": 41.804532,
+    "longitude": 12.251998,
+    "elevation": 13.0,
+    "bbox": [
+      41.70953,
+      12.12455,
+      41.89953,
+      12.37944
+    ],
+    "iata": "FCO",
+    "name": "Rome\u2013Fiumicino Leonardo da Vinci International Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LEBL": {
+    "latitude": 41.2971,
+    "longitude": 2.07846,
+    "elevation": 12.0,
+    "bbox": [
+      41.2021,
+      1.95201,
+      41.3921,
+      2.20491
+    ],
+    "iata": "BCN",
+    "name": "Josep Tarradellas Barcelona-El Prat Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LEMD": {
+    "latitude": 40.493407,
+    "longitude": -3.572249,
+    "elevation": 1998.0,
+    "bbox": [
+      40.39841,
+      -3.69717,
+      40.58841,
+      -3.44733
+    ],
+    "iata": "MAD",
+    "name": "Adolfo Su\u00e1rez Madrid\u2013Barajas Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LTFM": {
+    "latitude": 41.274874,
+    "longitude": 28.732136,
+    "elevation": 325.0,
+    "bbox": [
+      41.17987,
+      28.60573,
+      41.36987,
+      28.85854
+    ],
+    "iata": "IST",
+    "name": "\u0130stanbul Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "EIDW": {
+    "latitude": 53.428713,
+    "longitude": -6.262121,
+    "elevation": 242.0,
+    "bbox": [
+      53.33371,
+      -6.42156,
+      53.52371,
+      -6.10268
+    ],
+    "iata": "DUB",
+    "name": "Dublin Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "EKCH": {
+    "latitude": 55.617900848389,
+    "longitude": 12.656000137329,
+    "elevation": 17.0,
+    "bbox": [
+      55.5229,
+      12.48777,
+      55.7129,
+      12.82423
+    ],
+    "iata": "CPH",
+    "name": "Copenhagen Kastrup Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "ESSA": {
+    "latitude": 59.64849,
+    "longitude": 17.928829,
+    "elevation": 137.0,
+    "bbox": [
+      59.55349,
+      17.74082,
+      59.74349,
+      18.11683
+    ],
+    "iata": "ARN",
+    "name": "Stockholm-Arlanda Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "ENGM": {
+    "latitude": 60.193901,
+    "longitude": 11.1004,
+    "elevation": 681.0,
+    "bbox": [
+      60.0989,
+      10.90928,
+      60.2889,
+      11.29152
+    ],
+    "iata": "OSL",
+    "name": "Oslo-Gardermoen International Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LKPR": {
+    "latitude": 50.100874,
+    "longitude": 14.259911,
+    "elevation": 1247.0,
+    "bbox": [
+      50.00587,
+      14.11181,
+      50.19587,
+      14.40802
+    ],
+    "iata": "PRG",
+    "name": "V\u00e1clav Havel Airport Prague",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "EHAM": {
+    "latitude": 52.308601,
+    "longitude": 4.76389,
+    "elevation": -11.0,
+    "bbox": [
+      52.2136,
+      4.60851,
+      52.4036,
+      4.91927
+    ],
+    "iata": "AMS",
+    "name": "Amsterdam Airport Schiphol",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LIMC": {
+    "latitude": 45.6306,
+    "longitude": 8.72811,
+    "elevation": 768.0,
+    "bbox": [
+      45.5356,
+      8.59226,
+      45.7256,
+      8.86396
+    ],
+    "iata": "MXP",
+    "name": "Milan Malpensa International Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LPPT": {
+    "latitude": 38.7813,
+    "longitude": -9.13592,
+    "elevation": 374.0,
+    "bbox": [
+      38.6863,
+      -9.25779,
+      38.8763,
+      -9.01405
+    ],
+    "iata": "LIS",
+    "name": "Lisbon Humberto Delgado Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "ZBAA": {
+    "latitude": 40.077349,
+    "longitude": 116.596702,
+    "elevation": 116.0,
+    "bbox": [
+      39.98235,
+      116.47255,
+      40.17235,
+      116.72086
+    ],
+    "iata": "PEK",
+    "name": "Beijing Capital International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "RJTT": {
+    "latitude": 35.549678,
+    "longitude": 139.786958,
+    "elevation": 35.0,
+    "bbox": [
+      35.45468,
+      139.67019,
+      35.64468,
+      139.90372
+    ],
+    "iata": "HND",
+    "name": "Tokyo Haneda International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "VHHH": {
+    "latitude": 22.31184,
+    "longitude": 113.914862,
+    "elevation": 28.0,
+    "bbox": [
+      22.21684,
+      113.81217,
+      22.40684,
+      114.01755
+    ],
+    "iata": "HKG",
+    "name": "Hong Kong International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZSPD": {
+    "latitude": 31.1434,
+    "longitude": 121.805,
+    "elevation": 13.0,
+    "bbox": [
+      31.0484,
+      121.694,
+      31.2384,
+      121.916
+    ],
+    "iata": "PVG",
+    "name": "Shanghai Pudong International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZGGG": {
+    "latitude": 23.392401,
+    "longitude": 113.299004,
+    "elevation": 50.0,
+    "bbox": [
+      23.2974,
+      113.1955,
+      23.4874,
+      113.40251
+    ],
+    "iata": "CAN",
+    "name": "Guangzhou Baiyun International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "WSSS": {
+    "latitude": 1.35019,
+    "longitude": 103.994003,
+    "elevation": 22.0,
+    "bbox": [
+      1.25519,
+      103.89898,
+      1.44519,
+      104.08903
+    ],
+    "iata": "SIN",
+    "name": "Singapore Changi Airport",
+    "region": "south-southeast-asia",
+    "selectionAvailable": true
+  },
+  "RKSI": {
+    "latitude": 37.469101,
+    "longitude": 126.450996,
+    "elevation": 23.0,
+    "bbox": [
+      37.3741,
+      126.3313,
+      37.5641,
+      126.57069
+    ],
+    "iata": "ICN",
+    "name": "Incheon International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "VTBS": {
+    "latitude": 13.6811,
+    "longitude": 100.747002,
+    "elevation": 5.0,
+    "bbox": [
+      13.5861,
+      100.64923,
+      13.7761,
+      100.84478
+    ],
+    "iata": "BKK",
+    "name": "Suvarnabhumi Airport",
+    "region": "south-southeast-asia",
+    "selectionAvailable": true
+  },
+  "VIDP": {
+    "latitude": 28.55563,
+    "longitude": 77.09519,
+    "elevation": 777.0,
+    "bbox": [
+      28.46063,
+      76.98703,
+      28.65063,
+      77.20335
+    ],
+    "iata": "DEL",
+    "name": "Indira Gandhi International Airport",
+    "region": "south-southeast-asia",
+    "selectionAvailable": true
+  },
+  "VABB": {
+    "latitude": 19.088699,
+    "longitude": 72.867897,
+    "elevation": 39.0,
+    "bbox": [
+      18.9937,
+      72.76737,
+      19.1837,
+      72.96842
+    ],
+    "iata": "BOM",
+    "name": "Chhatrapati Shivaji Maharaj International Airport",
+    "region": "south-southeast-asia",
+    "selectionAvailable": true
+  },
+  "WMKK": {
+    "latitude": 2.74558,
+    "longitude": 101.709999,
+    "elevation": 69.0,
+    "bbox": [
+      2.65058,
+      101.61489,
+      2.84058,
+      101.80511
+    ],
+    "iata": "KUL",
+    "name": "Kuala Lumpur International Airport",
+    "region": "south-southeast-asia",
+    "selectionAvailable": true
+  },
+  "RCTP": {
+    "latitude": 25.0777,
+    "longitude": 121.233002,
+    "elevation": 106.0,
+    "bbox": [
+      24.9827,
+      121.12811,
+      25.1727,
+      121.33789
+    ],
+    "iata": "TPE",
+    "name": "Taiwan Taoyuan International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "OTHH": {
+    "latitude": 25.273056,
+    "longitude": 51.608056,
+    "elevation": 13.0,
+    "bbox": [
+      25.17806,
+      51.503,
+      25.36806,
+      51.71311
+    ],
+    "iata": "DOH",
+    "name": "Hamad International Airport",
+    "region": "middle-east",
+    "selectionAvailable": true
+  },
+  "OMDB": {
+    "latitude": 25.24979,
+    "longitude": 55.370992,
+    "elevation": 62.0,
+    "bbox": [
+      25.15479,
+      55.26596,
+      25.34479,
+      55.47603
+    ],
+    "iata": "DXB",
+    "name": "Dubai International Airport",
+    "region": "middle-east",
+    "selectionAvailable": true
+  },
+  "WIII": {
+    "latitude": -6.12557,
+    "longitude": 106.655998,
+    "elevation": 34.0,
+    "bbox": [
+      -6.22057,
+      106.56045,
+      -6.03057,
+      106.75154
+    ],
+    "iata": "CGK",
+    "name": "Soekarno-Hatta International Airport",
+    "region": "south-southeast-asia",
+    "selectionAvailable": true
+  },
+  "RJAA": {
+    "latitude": 35.76858,
+    "longitude": 140.388714,
+    "elevation": 141.0,
+    "bbox": [
+      35.67358,
+      140.27163,
+      35.86358,
+      140.5058
+    ],
+    "iata": "NRT",
+    "name": "Narita International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZGSZ": {
+    "latitude": 22.639474,
+    "longitude": 113.803262,
+    "elevation": 13.0,
+    "bbox": [
+      22.54447,
+      113.70033,
+      22.73447,
+      113.90619
+    ],
+    "iata": "SZX",
+    "name": "Shenzhen Bao'an International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZUUU": {
+    "latitude": 30.558257,
+    "longitude": 103.945966,
+    "elevation": 1625.0,
+    "bbox": [
+      30.46326,
+      103.83564,
+      30.65326,
+      104.05629
+    ],
+    "iata": "CTU",
+    "name": "Chengdu Shuangliu International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZHHH": {
+    "latitude": 30.774798,
+    "longitude": 114.213723,
+    "elevation": 113.0,
+    "bbox": [
+      30.6798,
+      114.10315,
+      30.8698,
+      114.32429
+    ],
+    "iata": "WUH",
+    "name": "Wuhan Tianhe International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZLXY": {
+    "latitude": 34.442207,
+    "longitude": 108.762385,
+    "elevation": 1572.0,
+    "bbox": [
+      34.34721,
+      108.64719,
+      34.53721,
+      108.87758
+    ],
+    "iata": "XIY",
+    "name": "Xi'an Xianyang International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZHCC": {
+    "latitude": 34.526497,
+    "longitude": 113.849165,
+    "elevation": 495.0,
+    "bbox": [
+      34.4315,
+      113.73385,
+      34.6215,
+      113.96448
+    ],
+    "iata": "CGO",
+    "name": "Zhengzhou Xinzheng International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZSHC": {
+    "latitude": 30.23609,
+    "longitude": 120.428865,
+    "elevation": 23.0,
+    "bbox": [
+      30.14109,
+      120.31891,
+      30.33109,
+      120.53882
+    ],
+    "iata": "HGH",
+    "name": "Hangzhou Xiaoshan International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZBTJ": {
+    "latitude": 39.124401092499994,
+    "longitude": 117.346000671,
+    "elevation": 10.0,
+    "bbox": [
+      39.0294,
+      117.22354,
+      39.2194,
+      117.46846
+    ],
+    "iata": "TSN",
+    "name": "Tianjin Binhai International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZUCK": {
+    "latitude": 29.712254,
+    "longitude": 106.651895,
+    "elevation": 1365.0,
+    "bbox": [
+      29.61725,
+      106.54251,
+      29.80725,
+      106.76128
+    ],
+    "iata": "CKG",
+    "name": "Chongqing Jiangbei International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "ZSNJ": {
+    "latitude": 31.735032,
+    "longitude": 118.865949,
+    "elevation": 49.0,
+    "bbox": [
+      31.64003,
+      118.75425,
+      31.83003,
+      118.97765
+    ],
+    "iata": "NKG",
+    "name": "Nanjing Lukou International Airport",
+    "region": "east-asia",
+    "selectionAvailable": true
+  },
+  "YSSY": {
+    "latitude": -33.946098,
+    "longitude": 151.177002,
+    "elevation": 21.0,
+    "bbox": [
+      -34.0411,
+      151.06248,
+      -33.8511,
+      151.29152
+    ],
+    "iata": "SYD",
+    "name": "Sydney Kingsford Smith International Airport",
+    "region": "oceania",
+    "selectionAvailable": true
+  },
+  "YMML": {
+    "latitude": -37.670732,
+    "longitude": 144.837898,
+    "elevation": 434.0,
+    "bbox": [
+      -37.76573,
+      144.71788,
+      -37.57573,
+      144.95792
+    ],
+    "iata": "MEL",
+    "name": "Melbourne Airport",
+    "region": "oceania",
+    "selectionAvailable": true
+  },
+  "NZAA": {
+    "latitude": -37.01199,
+    "longitude": 174.786331,
+    "elevation": 23.0,
+    "bbox": [
+      -37.10699,
+      174.66736,
+      -36.91699,
+      174.9053
+    ],
+    "iata": "AKL",
+    "name": "Auckland International Airport",
+    "region": "oceania",
+    "selectionAvailable": true
+  },
+  "SBGR": {
+    "latitude": -23.431274,
+    "longitude": -46.469954,
+    "elevation": 2461.0,
+    "bbox": [
+      -23.52627,
+      -46.57349,
+      -23.33627,
+      -46.36642
+    ],
+    "iata": "GRU",
+    "name": "S\u00e3o Paulo/Guarulhos\u2013Governor Andr\u00e9 Franco Montoro International Airport",
+    "region": "south-america",
+    "selectionAvailable": true
+  },
+  "SAEZ": {
+    "latitude": -34.8222,
+    "longitude": -58.5358,
+    "elevation": 67.0,
+    "bbox": [
+      -34.9172,
+      -58.65152,
+      -34.7272,
+      -58.42008
+    ],
+    "iata": "EZE",
+    "name": "Ezeiza International Airport - Ministro Pistarini",
+    "region": "south-america",
+    "selectionAvailable": true
+  },
+  "SCEL": {
+    "latitude": -33.393001556396484,
+    "longitude": -70.78579711914062,
+    "elevation": 1555.0,
+    "bbox": [
+      -33.488,
+      -70.89958,
+      -33.298,
+      -70.67201
+    ],
+    "iata": "SCL",
+    "name": "Comodoro Arturo Merino Ben\u00edtez International Airport",
+    "region": "south-america",
+    "selectionAvailable": true
+  },
+  "KLGA": {
+    "latitude": 40.777199,
+    "longitude": -73.872597,
+    "elevation": 21.0,
+    "bbox": [
+      40.6822,
+      -73.99805,
+      40.8722,
+      -73.74714
+    ],
+    "iata": "LGA",
+    "name": "LaGuardia Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "PANC": {
+    "latitude": 61.179004,
+    "longitude": -149.992561,
+    "elevation": 152.0,
+    "bbox": [
+      61.084,
+      -150.18963,
+      61.274,
+      -149.7955
+    ],
+    "iata": "ANC",
+    "name": "Ted Stevens Anchorage International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "PHNL": {
+    "latitude": 21.318387,
+    "longitude": -157.92567,
+    "elevation": 13.0,
+    "bbox": [
+      21.22339,
+      -158.02765,
+      21.41339,
+      -157.82369
+    ],
+    "iata": "HNL",
+    "name": "Daniel K. Inouye International Airport",
+    "region": "oceania",
+    "selectionAvailable": true
+  },
+  "KSAN": {
+    "latitude": 32.733601,
+    "longitude": -117.190002,
+    "elevation": 17.0,
+    "bbox": [
+      32.6386,
+      -117.30294,
+      32.8286,
+      -117.07707
+    ],
+    "iata": "SAN",
+    "name": "San Diego International Airport",
+    "region": "north-america",
+    "selectionAvailable": false
+  },
+  "KPDX": {
+    "latitude": 45.588699,
+    "longitude": -122.598,
+    "elevation": 31.0,
+    "bbox": [
+      45.4937,
+      -122.73375,
+      45.6837,
+      -122.46225
+    ],
+    "iata": "PDX",
+    "name": "Portland International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KTPA": {
+    "latitude": 27.9755,
+    "longitude": -82.533203,
+    "elevation": 26.0,
+    "bbox": [
+      27.8805,
+      -82.64077,
+      28.0705,
+      -82.42563
+    ],
+    "iata": "TPA",
+    "name": "Tampa International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KBNA": {
+    "latitude": 36.1245,
+    "longitude": -86.6782,
+    "elevation": 599.0,
+    "bbox": [
+      36.0295,
+      -86.79581,
+      36.2195,
+      -86.56059
+    ],
+    "iata": "BNA",
+    "name": "Nashville International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "KAUS": {
+    "latitude": 30.197535,
+    "longitude": -97.662015,
+    "elevation": 542.0,
+    "bbox": [
+      30.10253,
+      -97.77193,
+      30.29253,
+      -97.5521
+    ],
+    "iata": "AUS",
+    "name": "Austin Bergstrom International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "CYUL": {
+    "latitude": 45.467837,
+    "longitude": -73.742294,
+    "elevation": 118.0,
+    "bbox": [
+      45.37284,
+      -73.87775,
+      45.56284,
+      -73.60683
+    ],
+    "iata": "YUL",
+    "name": "Montreal / Pierre Elliott Trudeau International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "CYYC": {
+    "latitude": 51.118822,
+    "longitude": -114.009933,
+    "elevation": 3557.0,
+    "bbox": [
+      51.02382,
+      -114.16128,
+      51.21382,
+      -113.85859
+    ],
+    "iata": "YYC",
+    "name": "Calgary International Airport",
+    "region": "north-america",
+    "selectionAvailable": true
+  },
+  "EGKK": {
+    "latitude": 51.148744,
+    "longitude": -0.185739,
+    "elevation": 202.0,
+    "bbox": [
+      51.05374,
+      -0.33718,
+      51.24374,
+      -0.0343
+    ],
+    "iata": "LGW",
+    "name": "London Gatwick Airport",
+    "region": "europe",
+    "selectionAvailable": false
+  },
+  "EGCC": {
+    "latitude": 53.349375,
+    "longitude": -2.279521,
+    "elevation": 257.0,
+    "bbox": [
+      53.25438,
+      -2.43867,
+      53.44438,
+      -2.12037
+    ],
+    "iata": "MAN",
+    "name": "Manchester Airport",
+    "region": "europe",
+    "selectionAvailable": false
+  },
+  "EBBR": {
+    "latitude": 50.901402,
+    "longitude": 4.48444,
+    "elevation": 175.0,
+    "bbox": [
+      50.8064,
+      4.3338,
+      50.9964,
+      4.63508
+    ],
+    "iata": "BRU",
+    "name": "Brussels Airport",
+    "region": "europe",
+    "selectionAvailable": false
+  },
+  "EFHK": {
+    "latitude": 60.318363,
+    "longitude": 24.963341,
+    "elevation": 179.0,
+    "bbox": [
+      60.22336,
+      24.77149,
+      60.41336,
+      25.15519
+    ],
+    "iata": "HEL",
+    "name": "Helsinki Vantaa Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "LOWW": {
+    "latitude": 48.110298,
+    "longitude": 16.5697,
+    "elevation": 600.0,
+    "bbox": [
+      48.0153,
+      16.42742,
+      48.2053,
+      16.71198
+    ],
+    "iata": "VIE",
+    "name": "Vienna International Airport",
+    "region": "europe",
+    "selectionAvailable": false
+  },
+  "FAOR": {
+    "latitude": -26.140081,
+    "longitude": 28.246801,
+    "elevation": 5558.0,
+    "bbox": [
+      -26.23508,
+      28.14098,
+      -26.04508,
+      28.35262
+    ],
+    "iata": "JNB",
+    "name": "O.R. Tambo International Airport",
+    "region": "africa",
+    "selectionAvailable": true
+  },
+  "FACT": {
+    "latitude": -33.97403,
+    "longitude": 18.604333,
+    "elevation": 151.0,
+    "bbox": [
+      -34.06903,
+      18.48978,
+      -33.87903,
+      18.71889
+    ],
+    "iata": "CPT",
+    "name": "Cape Town International Airport",
+    "region": "africa",
+    "selectionAvailable": true
+  },
+  "HECA": {
+    "latitude": 30.111534,
+    "longitude": 31.396694,
+    "elevation": 322.0,
+    "bbox": [
+      30.01653,
+      31.28687,
+      30.20653,
+      31.50651
+    ],
+    "iata": "CAI",
+    "name": "Cairo International Airport",
+    "region": "africa",
+    "selectionAvailable": true
+  },
+  "OERK": {
+    "latitude": 24.9576,
+    "longitude": 46.698799,
+    "elevation": 2049.0,
+    "bbox": [
+      24.8626,
+      46.59401,
+      25.0526,
+      46.80358
+    ],
+    "iata": "RUH",
+    "name": "King Khalid International Airport",
+    "region": "middle-east",
+    "selectionAvailable": false
+  },
+  "OMAA": {
+    "latitude": 24.440966,
+    "longitude": 54.649237,
+    "elevation": 88.0,
+    "bbox": [
+      24.34597,
+      54.54489,
+      24.53597,
+      54.75359
+    ],
+    "iata": "AUH",
+    "name": "Zayed International Airport",
+    "region": "middle-east",
+    "selectionAvailable": true
+  },
+  "UUEE": {
+    "latitude": 55.976858,
+    "longitude": 37.41121,
+    "elevation": 622.0,
+    "bbox": [
+      55.88186,
+      37.24142,
+      56.07186,
+      37.581
+    ],
+    "iata": "SVO",
+    "name": "Sheremetyevo International Airport",
+    "region": "europe",
+    "selectionAvailable": true
+  },
+  "ZBAD": {
+    "latitude": 39.501289,
+    "longitude": 116.413967,
+    "elevation": 98.0,
+    "bbox": [
+      39.406289,
+      116.283967,
+      39.596289,
+      116.543967
+    ],
+    "iata": "PKX",
+    "name": "Beijing Daxing International Airport",
+    "region": "east-asia",
+    "selectionAvailable": false
+  }
+}

@@ -8,7 +8,7 @@ const COLORS = { land: 0x718064, apron: 0x92958b, taxiway: 0x535954, roads: 0x62
 const distanceToBox = (point, box) => Math.hypot(Math.max(box.minX - point.x, 0, point.x - box.maxX), Math.max(box.minZ - point.z, 0, point.z - box.maxZ));
 
 function makeMaterial(kind) {
-  const material = new THREE.MeshStandardMaterial({ color: COLORS[kind], roughness: .95, side: THREE.DoubleSide });
+  const material = new THREE.MeshLambertMaterial({ color: COLORS[kind] });
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = `varying vec2 vSurfacePosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvSurfacePosition = position.xz;');
     const details = kind === 'apron'

@@ -1,3 +1,5 @@
+import { hasMechanicalFeedback, hasManualReversion, hydraulicAssistAvailable, advanceControlPosition, getControlLock } from './physics/controlTransmission.js';
+import { updateCockpitSmoke } from './cockpitSmoke.js';
 
 /**
  * Realistic Flight Physics Service (6-DOF Rigid Body Dynamics)
@@ -16,6 +18,7 @@ import FADECService from './FADECService.js';
 import RealisticAutopilotService from './RealisticAutopilotService.js';
 import FailureHandler from './failures/FailureHandler.js';
 import WarningSystem from './WarningSystem.js';
+import CrewAlertState from './CrewAlertState.js';
 import StructuralLimitsService from './physics/StructuralLimitsService.js';
 import { airportService } from './airportService.js';
 import { Vector3, Quaternion, calculateDistanceMeters } from '../utils/flightMath.js';
@@ -25,6 +28,10 @@ import SystemsService from './physics/SystemsService.js';
 import AerodynamicsService from './physics/AerodynamicsService.js';
 import NavigationService from './physics/NavigationService.js';
 import AircraftSystemModel from './systems/AircraftSystemModel.js';
+import { validateFlightSave } from './flightRecovery.js';
+import { loadAirportGroundPackage } from './airportGroundPackages.js';
+import { getVisualRunwayGeometry } from '../data/visualRunwayCoordinates.js';
+import { resolveVisualRunways } from '../utils/airportGroundCoordinates.js';
 
 // ==========================================
 // Main Service
@@ -186,6 +193,7 @@ class RealisticFlightPhysicsService {
             engineCount: this.aircraft.engineCount
         });
         this.warningSystem = new WarningSystem();
+        this.crewAlertState = new CrewAlertState();
         this.structuralLimits = new StructuralLimitsService(aircraftData);
         this.sensors = { 
             pitotBlocked: false,
@@ -337,9 +345,11 @@ class RealisticFlightPhysicsService {
             
             // Ground Handling
             gearHeight: Number.isFinite(data.gearHeight) && data.gearHeight > 0 ? data.gearHeight : 3.0,
-            gearStiffness: 3000000, // Increased to support ~80 tons (Weight ~800kN). Compression ~0.3m
+            // Preserve the 737 baseline and size support for the aircraft's design load.
+            // A fixed spring bottoms out at 0.35 m on widebodies, losing wheel load/braking.
+            gearStiffness: data.gearStiffness ?? 3000000 * ((data.maxTakeoffWeight || 79000) / 79000),
             gearDamping: 300000, // Increased for stability
-            frictionCoeff: 0.02,
+            frictionCoeff: data.frictionCoeff ?? 0.004,
             brakingFriction: 0.8,
             
             // Flap Profile Fallback
@@ -424,6 +434,9 @@ class RealisticFlightPhysicsService {
 
             if (navUpdate.activeWaypoint) {
                 const activeWaypoint = navUpdate.activeWaypoint;
+                this.autopilot.activeWaypointAltitude = Number.isFinite(activeWaypoint.altitude)
+                    ? activeWaypoint.altitude
+                    : (Number.isFinite(activeWaypoint.altitudeConstraint) ? activeWaypoint.altitudeConstraint : null);
                 const dist = Number.isFinite(navUpdate.distanceToWaypoint)
                     ? navUpdate.distanceToWaypoint
                     : calculateDistanceMeters(this.state.geo.lat, this.state.geo.lon, activeWaypoint.latitude, activeWaypoint.longitude);
@@ -441,12 +454,19 @@ class RealisticFlightPhysicsService {
                 }
 
                 if (!this.onGround && (activeWaypoint.type === 'airport' || activeWaypoint.type === 'runway') && activeWaypoint.selectedRunway && activeWaypoint.details) {
-                    const airportCode = activeWaypoint.details.iata || activeWaypoint.details.icao || activeWaypoint.label;
-                    if (!this.runwayGeometry || (this.runwayGeometry.runwayName !== activeWaypoint.selectedRunway && this.runwayGeometry.airportCode !== airportCode)) {
-                        const geom = airportService.getRunwayGeometry(airportCode, activeWaypoint.selectedRunway);
-                        if (geom) {
+                    const airportCode = activeWaypoint.details.icao || activeWaypoint.details.iata || activeWaypoint.label;
+                    const geom = airportService.getRunwayGeometry(airportCode, activeWaypoint.selectedRunway);
+                    if (geom) {
+                        const matches = reference => reference?.airportCode === geom.airportCode
+                            && reference?.runwayName === geom.runwayName;
+                        if (!matches(this.autopilot.runwayGeometry)) this.setApproachReference(geom);
+                        // An FMS destination is a navigation target, not the ground
+                        // beneath the aircraft. Only hand off physical airport
+                        // contact once it is within the outside view's 12 NM area.
+                        const distance = calculateDistanceMeters(this.state.geo.lat, this.state.geo.lon,
+                            geom.thresholdStart.latitude, geom.thresholdStart.longitude);
+                        if (distance <= 12 * 1852 && !matches(this.runwayGeometry)) {
                             this.setRunwayGeometry(geom);
-                            console.log(`📍 Physics: Auto-selected runway ${activeWaypoint.selectedRunway} at ${airportCode}`);
                         }
                     }
                 }
@@ -463,8 +483,9 @@ class RealisticFlightPhysicsService {
             trim: Number.isFinite(input?.trim) ? input.trim : this.controls.trim
         };
 
-        const cwsPitch = this.autopilot.engaged && this.autopilot.mode === 'CWS' && Math.abs(Number(input?.pitch) || 0) > 0.08;
-        const cwsRoll = this.autopilot.engaged && this.autopilot.mode === 'CWS' && Math.abs(Number(input?.roll) || 0) > 0.08;
+        const cwsActive = this.autopilot.engaged && (this.autopilot.mode === 'CWS' || this.autopilot.couplingMode === 'CWS');
+        const cwsPitch = cwsActive && Math.abs(Number(input?.pitch) || 0) > 0.08;
+        const cwsRoll = cwsActive && Math.abs(Number(input?.roll) || 0) > 0.08;
         if (cwsPitch || cwsRoll) {
             this.autopilot.setTargets({
                 ...(cwsPitch ? { altitude: apState.altitude, vs: apState.verticalSpeed } : {}),
@@ -492,7 +513,7 @@ class RealisticFlightPhysicsService {
         
         // Update Failure System
         if (this.failureSystem) {
-            this.failureSystem.update(dt, this.getOutputState());
+            this.failureSystem.update(dt, { ...this.getOutputState(), onGround: this.onGround });
             this.failureSystem.applyImpact(this);
         }
 
@@ -579,6 +600,12 @@ class RealisticFlightPhysicsService {
         const aileronResponse = autopilotActive ? Math.min(1, responseRate * 1.15) : Math.min(1, responseRate * 3);
         const rudderResponse = autopilotActive ? responseRate : Math.min(1, responseRate * 2);
 
+        // Lever commands are discrete selections; actuator smoothing must not keep
+        // the cockpit in reverse after the pilot selects forward idle.
+        this.throttleCommand = throttleInput;
+        this.engineThrottleCommands = this.controls.engineThrottles.map((_, index) =>
+            Number.isFinite(input.throttles?.[index]) ? input.throttles[index] : throttleInput);
+
         // Throttle (Master)
         this.controls.throttle += (throttleInput - this.controls.throttle) * throttleResponse;
 
@@ -598,9 +625,17 @@ class RealisticFlightPhysicsService {
         }
 
         // Flight Controls (Pitch, Roll, Yaw)
-        this.controls.elevator += (pitchInput - this.controls.elevator) * elevatorResponse;
-        this.controls.aileron += (rollInput - this.controls.aileron) * aileronResponse;
-        this.controls.rudder += (yawInput - this.controls.rudder) * rudderResponse;
+        const assistAvailable = hydraulicAssistAvailable(this.systems);
+        for (const [axis, target, response] of [
+            ['elevator', pitchInput, elevatorResponse],
+            ['aileron', rollInput, aileronResponse],
+            ['rudder', yawInput, rudderResponse]
+        ]) {
+            const lock = getControlLock(this, axis);
+            this.controls[axis] = lock !== null ? lock : advanceControlPosition(
+                this.controls[axis], target, response, dt,
+                !assistAvailable && hasManualReversion(this.aircraft, axis), !autopilotActive);
+        }
 
         // Systems
         if (input.flaps !== undefined) this.controls.flaps = input.flaps;
@@ -631,6 +666,7 @@ class RealisticFlightPhysicsService {
             this.systemModel
         );
 
+        updateCockpitSmoke(this.systems, this.engines, this.failureSystem?.activeFailures, dt);
         this.updateControlEffectiveness(dt);
     }
 
@@ -650,6 +686,11 @@ class RealisticFlightPhysicsService {
         this.controlEffectiveness.elevator = effectiveness.elevator ?? this.controlEffectiveness.elevator;
         this.controlEffectiveness.aileron = effectiveness.aileron ?? this.controlEffectiveness.aileron;
         this.controlEffectiveness.rudder = effectiveness.rudder ?? this.controlEffectiveness.rudder;
+        for (const axis of ['aileron', 'elevator']) {
+            if (hasManualReversion(this.aircraft, axis)) {
+                this.controlEffectiveness[axis] = this.systemModel?.componentStore?.components.get(`controls.${axis}`)?.health ?? 1;
+            }
+        }
         this.controlEffectiveness.gear = effectiveness.gear ?? this.controlEffectiveness.gear;
         this.controlEffectiveness.spoilers = effectiveness.spoilers ?? this.controlEffectiveness.spoilers ?? 1.0;
 
@@ -667,7 +708,7 @@ class RealisticFlightPhysicsService {
 
         ['aileron', 'elevator', 'rudder', 'gear', 'flaps'].forEach(axis => {
             if (this.failureParams.control_sensitivity[axis] !== undefined) {
-                this.controlEffectiveness[axis] = (this.controlEffectiveness[axis] || 1.0) * this.failureParams.control_sensitivity[axis];
+                this.controlEffectiveness[axis] = (this.controlEffectiveness[axis] ?? 1.0) * this.failureParams.control_sensitivity[axis];
             }
 
             if (this.failureParams.movement_restricted[axis]) {
@@ -1144,7 +1185,7 @@ class RealisticFlightPhysicsService {
         const sinA = Math.sin(alpha);
         
         const Fx_aero = -F_drag * cosA + F_lift * sinA;
-        let Fy_aero = F_side;
+        const Fy_aero = F_side;
         const Fz_aero = -F_drag * sinA - F_lift * cosA;
 
         // Dimensional Moments
@@ -1152,15 +1193,6 @@ class RealisticFlightPhysicsService {
         let My_aero = q * S * c * Cm;
         let Mz_aero = q * S * b * Cn;
 
-        // --- Runway Stabilizer (User Request) ---
-        // Rookie: Rail mode (Applied inside method via state override).
-        // Others: Gentle pull forces.
-        const stabilizer = this.applyRunwayStabilizer();
-        if (stabilizer) {
-            Fy_aero += stabilizer.Fy;
-            Mz_aero += stabilizer.Mz;
-        }
-        
         let nosewheelSteeringAngle = 0;
         let nosewheelSteeringAuthority = 0;
         let noseGearContactForce = 0;
@@ -1215,6 +1247,7 @@ class RealisticFlightPhysicsService {
         );
         
         let onGroundAny = false;
+        let brakeGrip = 0;
 
         gears.forEach(gear => {
             // 1. Calculate Gear Position in Earth Frame (Z-Down)
@@ -1234,12 +1267,9 @@ class RealisticFlightPhysicsService {
                 const v_vertical = V_point_earth.z; // Positive = Moving Down
                 
                 // 3. Normal Force (Spring + Damper)
-                let F_n = -(gear.k * depth + gear.c * v_vertical);
-                if (F_n > 0) F_n = 0; // Don't pull ground
-                
-                // Clamp Normal Force to prevent explosion (max 4G per gear approx)
-                const maxForce = this.state.mass * 9.81 * 4;
-                if (Math.abs(F_n) > maxForce) F_n = -maxForce;
+                let F_n = this.groundInteractionService.getNormalForce(
+                    gear, depth, v_vertical, this.state.mass
+                );
 
                 // 4. Friction (Anisotropic: Rolling vs Lateral)
                 // Calculate in Body Frame for correct orientation relative to wheels
@@ -1273,9 +1303,9 @@ class RealisticFlightPhysicsService {
                 
                 // Friction Coefficients
                 const isBraking = this.controls.wheelBrakes > 0.1 && gear.name.includes('main');
-                let mu_roll = isBraking ? this.aircraft.brakingFriction : this.aircraft.frictionCoeff; // 0.8 or 0.02
+                let mu_roll = isBraking ? this.aircraft.brakingFriction : this.aircraft.frictionCoeff;
                 let mu_slide = 0.9; // High lateral friction (0.9 for dry tarmac)
-                const brakingData = this.groundStatus && this.groundStatus.status === 'RUNWAY'
+                const brakingData = ['RUNWAY', 'TAXIWAY', 'APRON', 'PAVED'].includes(this.groundStatus?.status)
                     ? this.getRunwayBrakingData()
                     : null;
                 
@@ -1315,10 +1345,23 @@ class RealisticFlightPhysicsService {
                 let Fy_wheel = 0;
                 
                 const F_normal_mag = Math.abs(F_n);
+                if (isBraking) brakeGrip += F_normal_mag * mu_roll;
                 
                 // Longitudinal (Rolling)
-                if (Math.abs(vx_wheel) < v_threshold) {
-                     Fx_wheel = -vx_wheel * F_normal_mag * 50; // Linear damping at stop
+                const preserve737Handling = this.aircraft.icao === 'B738';
+                if (!preserve737Handling && isBraking && Math.abs(vx_wheel) < 0.5) {
+                     // Static brakes oppose applied thrust even at zero wheel speed.
+                     // Share the longitudinal demand between the two main contacts,
+                     // bounded by actual wheel load and surface grip.
+                     const externalForce = Fx_aero + Fx_thrust + gravityBody.x;
+                     const stopForce = dt > 0 ? -vx_wheel * this.state.mass / (2 * dt) : 0;
+                     const demand = stopForce - externalForce * cosS / 2;
+                     const grip = F_normal_mag * mu_roll;
+                     Fx_wheel = Math.max(-grip, Math.min(grip, demand));
+                } else if (Math.abs(vx_wheel) < v_threshold) {
+                     Fx_wheel = isBraking
+                         ? -vx_wheel * F_normal_mag * 50
+                         : -vx_wheel / v_threshold * F_normal_mag * mu_roll;
                 } else {
                      Fx_wheel = -Math.sign(vx_wheel) * F_normal_mag * mu_roll;
                 }
@@ -1365,6 +1408,10 @@ class RealisticFlightPhysicsService {
         });
 
         this.onGround = onGroundAny;
+        // Use available contact grip, including weather and hydraulic degradation,
+        // rather than throttle position to decide whether static brakes can hold.
+        this.groundBrakeCanHold = onGroundAny && brakeGrip > 0
+            && Math.hypot(Fx_aero + Fx_thrust + gravityBody.x, Fy_aero + gravityBody.y) <= brakeGrip;
 
         if (this.onGround) {
             const weightGround = this.state.mass * this.CONSTANTS.G;
@@ -1541,6 +1588,13 @@ class RealisticFlightPhysicsService {
 
         this.state.rates = this.state.rates.add(new Vector3(p_dot, q_dot, r_dot).scale(dt));
 
+        if (this.aircraft.icao !== 'B738' && this.systems?.brakes?.parkingBrake
+            && this.groundBrakeCanHold && Math.hypot(this.state.vel.x, this.state.vel.y) < 0.5) {
+            this.state.vel.x = 0;
+            this.state.vel.y = 0;
+            this.state.rates = new Vector3(0, 0, 0);
+        }
+
         // Kinematics (Position & Orientation)
         // Position dot (Earth) = R_body_to_earth * V_body
         const v_earth = this.state.quat.rotate(this.state.vel);
@@ -1565,7 +1619,8 @@ class RealisticFlightPhysicsService {
 
         // Hard Stop for Low Speed Ground Stability
         const brakingToHold = this.controls.wheelBrakes > 0.1 || this.systems?.brakes?.parkingBrake === true;
-        if (this.onGround && brakingToHold && this.state.vel.magnitude() < 0.5 && this.controls.throttle < 0.1) {
+        const holdPermitted = this.aircraft.icao === 'B738' || this.groundBrakeCanHold;
+        if (this.onGround && brakingToHold && holdPermitted && this.state.vel.magnitude() < 0.5 && this.controls.throttle < 0.1) {
             this.state.vel = new Vector3(0, 0, 0);
             this.state.rates = new Vector3(0, 0, 0);
         }
@@ -1634,6 +1689,18 @@ class RealisticFlightPhysicsService {
         const autopilotStatus = this.getAutopilotStatus ? this.getAutopilotStatus() : { engaged: false, mode: 'OFF', targets: {} };
 
         return {
+            time: this.time,
+            airportElevation: this.airportElevation,
+            onGround: this.onGround,
+            currentGroundZ: this.currentGroundZ,
+            environment: { ...this.environment },
+            flightPlan: this.flightPlan,
+            failureParams: this.failureParams,
+            failureState: this.failureSystem?.getSerializableState(),
+            componentStates: this.systemModel?.componentStore.getSnapshot(),
+            engineStates: this.engines.map(engine => ({ ...engine.state })),
+            throttleCommand: this.throttleCommand,
+            engineThrottleCommands: this.engineThrottleCommands,
             position: {
                 x: this.state.pos.x,
                 y: this.state.pos.y,
@@ -1682,7 +1749,13 @@ class RealisticFlightPhysicsService {
                 mode: autopilotStatus.mode,
                 targets: autopilotStatus.targets,
                 vnavArmed: autopilotStatus.vnavArmed,
-                autothrottleArmed: autopilotStatus.autothrottleArmed
+                autothrottleArmed: autopilotStatus.autothrottleArmed,
+                navFrequency: this.autopilot.nav1Frequency,
+                approachReference: this.autopilot.runwayGeometry,
+                flightDirectorEnabled: this.autopilot.flightDirectorEnabled,
+                couplingMode: this.autopilot.couplingMode,
+                modeSelected: this.autopilot.modeSelected,
+                navPlan: this.autopilot.navPlan
             },
             autopilotTargets: autopilotStatus.targets,
             systems: this.systems,
@@ -1752,6 +1825,9 @@ class RealisticFlightPhysicsService {
                 yaw: this.controls.rudder,
                 trim: this.controls.trim
             },
+            controlFeedback: { mechanical: hasMechanicalFeedback(this.aircraft) },
+            throttleCommand: this.throttleCommand ?? this.controls.throttle,
+            engineThrottleCommands: [...(this.engineThrottleCommands ?? this.controls.engineThrottles)],
             engineThrottles: Array.isArray(this.controls.engineThrottles) ? [...this.controls.engineThrottles] : [],
             flaps: this.controls.flaps,
             gear: this.controls.gear > 0.5,
@@ -1836,7 +1912,8 @@ class RealisticFlightPhysicsService {
         };
 
         if (this.warningSystem) {
-             outputState.activeWarnings = this.warningSystem.update(outputState, 0.016);
+             outputState.alertState = this.crewAlertState.update(this.warningSystem.update(outputState, 0.016));
+             outputState.activeWarnings = outputState.alertState.warnings;
         }
 
         return outputState;
@@ -1892,9 +1969,23 @@ class RealisticFlightPhysicsService {
     }
 
     performSystemAction(system, action, value) {
+        if (system === 'alerts') {
+            if (action === 'recall') this.crewAlertState.recall();
+            else this.crewAlertState.acknowledge(action);
+            return;
+        }
         if (!this.systems[system]) {
             console.warn(`System ${system} not found`);
             return;
+        }
+
+        // Older saves predate cockpit illumination controls. Define them before
+        // generic dispatch, which intentionally rejects unknown system fields.
+        if (system === 'lighting') {
+            this.systems.lighting.panel ??= false;
+            this.systems.lighting.background ??= false;
+            this.systems.lighting.flood ??= false;
+            this.systems.lighting.dome ??= false;
         }
 
         // Handle Toggle Logic (if value is undefined)
@@ -2004,13 +2095,19 @@ class RealisticFlightPhysicsService {
             else if (normalizedAction === 'eng2_handle') this.systems.fire.eng2Handle = toggle(this.systems.fire.eng2Handle);
             else if (normalizedAction === 'apu_handle') this.systems.fire.apuHandle = toggle(this.systems.fire.apuHandle);
 
-            // Bottle Discharge (Requires handle pulled usually, but we check in logic)
-            else if (normalizedAction === 'eng1_bottle1') this.systems.fire.bottle1_discharge = true; // Momentary
-            else if (normalizedAction === 'eng1_bottle2') this.systems.fire.bottle2_discharge = true;
-            else if (normalizedAction === 'eng2_bottle1') this.systems.fire.bottle1_discharge = true;
-            else if (normalizedAction === 'eng2_bottle2') this.systems.fire.bottle2_discharge = true;
-            else if (normalizedAction === 'apu_bottle1') this.systems.fire.bottle1_discharge = true;
-            else if (normalizedAction === 'apu_bottle2') this.systems.fire.bottle2_discharge = true;
+            // Route agent only to the selected, pulled handle; reject spent bottles.
+            else {
+                const match = normalizedAction.match(/^(eng[1-4]|apu)_bottle([12])$/);
+                if (match) {
+                    const [, target, bottleNumber] = match;
+                    const bottle = target === 'apu' ? 'apuBottle' : `bottle${bottleNumber}`;
+                    const fire = this.systems.fire;
+                    if (fire[`${target}Handle`] && fire[bottle] > 0 && !fire[`${bottle}_discharge`]) {
+                        fire[`${bottle}_target`] = target;
+                        fire[`${bottle}_discharge`] = true;
+                    }
+                }
+            }
         }
         else if (system === 'brakes') {
             if (action === 'parkingBrake') {
@@ -2068,7 +2165,8 @@ class RealisticFlightPhysicsService {
 
     /**
      * Handle Radio Tuning Event
-     * Automatically sets ILS/Runway Geometry if a tower/approach frequency is tuned.
+     * Update the navigation reference for a nearby radio station. The physical
+     * runway and loaded ground layout are independent of the tuned frequency.
      * @param {number} frequency - Tuned frequency in MHz
      * @param {Object} flightPlan - Current flight plan object
      */
@@ -2077,7 +2175,9 @@ class RealisticFlightPhysicsService {
         
         // console.log(`Physics: Radio tuned to ${frequency.toFixed(3)} MHz`);
         
-        const airport = airportService.getAirportByFrequency(frequency);
+        const airport = airportService.getAirportByFrequency(frequency, {
+            latitude: this.state.geo.lat, longitude: this.state.geo.lon
+        });
         
         if (airport) {
             const airportCode = airport.iata || airport.icao;
@@ -2103,6 +2203,17 @@ class RealisticFlightPhysicsService {
                  }
             }
             
+            // Preserve the selected strip/end at this airport. A tower frequency
+            // does not identify a parallel runway or authorize a runway change.
+            const sameAirport = geometry => geometry && [airport.icao, airport.iata].filter(Boolean)
+                .includes(geometry.airportCode);
+            if (!runwayName && sameAirport(this.autopilot.runwayGeometry)) {
+                runwayName = this.autopilot.runwayGeometry.runwayName;
+            }
+            if (!runwayName && sameAirport(this.runwayGeometry)) {
+                runwayName = this.runwayGeometry.runwayName;
+            }
+
             // 3. Fallback to Arrival default if listed
             if (!runwayName && flightPlan && flightPlan.arrival && (flightPlan.arrival.iata === airportCode || flightPlan.arrival.icao === airportCode)) {
                  if (flightPlan.arrival.runways && flightPlan.arrival.runways.length > 0) {
@@ -2135,7 +2246,7 @@ class RealisticFlightPhysicsService {
                     options = ["09", "27"];
                 }
 
-                const aircraftHeading = this.state.heading || 0;
+                const aircraftHeading = (this.state.quat.toEuler().psi * 180 / Math.PI + 360) % 360;
                 
                 // Parse current selection heading
                 // Handle "09L" -> 09 -> 90
@@ -2169,7 +2280,7 @@ class RealisticFlightPhysicsService {
             if (runwayName) {
                 const geom = airportService.getRunwayGeometry(airportCode, runwayName);
                 if (geom) {
-                    this.setRunwayGeometry(geom);
+                    this.setApproachReference(geom);
                     console.log(`Physics: ILS tuned to ${airportCode} RWY ${runwayName}`);
                     
                     // Optional: Engage ILS mode if close enough? No, let pilot do that.
@@ -2181,10 +2292,39 @@ class RealisticFlightPhysicsService {
 
     setRunwayGeometry(geometry) {
         this.runwayGeometry = geometry;
-        if (this.autopilot && typeof this.autopilot.setRunwayGeometry === 'function') {
-            this.autopilot.setRunwayGeometry(geometry);
-        }
+        this.groundInteractionService.airportLayout = null;
+        this.loadGroundLayout(geometry);
         console.log("Physics Service: Runway Geometry Set", geometry);
+    }
+
+    setApproachReference(geometry) {
+        this.autopilot.setRunwayGeometry(geometry);
+        return this.getAutopilotStatus();
+    }
+
+    async loadGroundLayout(geometry) {
+        if (!geometry?.airportCode || !geometry.thresholdStart) return;
+        try {
+            let layout = await loadAirportGroundPackage(geometry.airportCode);
+            if (!layout) {
+                const { createProceduralGround } = await import('../utils/airportGroundLayout.js');
+                const visual = getVisualRunwayGeometry(geometry.airportCode, geometry.runwayName, geometry);
+                const airport = airportService.getAirportByCode(geometry.airportCode);
+                const others = (airport?.runways || []).map(runway => {
+                    const ends = String(runway.name || '').split(/[/-]/).filter(Boolean);
+                    const activeHeading = Number(geometry.runwayName?.slice(0, 2)) * 10;
+                    const end = ends.find(name => Math.abs((((Number(name.slice(0, 2)) * 10 - activeHeading) + 540) % 360) - 180) <= 90) || ends[0];
+                    return getVisualRunwayGeometry(geometry.airportCode, end,
+                        airportService.getRunwayGeometry(geometry.airportCode, end));
+                }).filter(runway => runway && runway.runwayName !== visual.runwayName);
+                const origin = { latitude: visual.airportLat ?? visual.thresholdStart.latitude,
+                    longitude: visual.airportLon ?? visual.thresholdStart.longitude };
+                layout = createProceduralGround(geometry.airportCode, resolveVisualRunways(visual, others), origin);
+            }
+            if (this.runwayGeometry === geometry) this.groundInteractionService.airportLayout = layout;
+        } catch {
+            // Retain runway-based contact classification if scenery is unavailable.
+        }
     }
 
     updateGroundStatus() {
@@ -2196,17 +2336,6 @@ class RealisticFlightPhysicsService {
         );
         this.groundStatus = result.groundStatus;
         this.currentGroundZ = result.currentGroundZ;
-    }
-
-    applyRunwayStabilizer() {
-        return this.groundInteractionService.applyRunwayStabilizer(
-            this.state,
-            this.runwayGeometry,
-            this.onGround,
-            this.groundStatus,
-            this.difficulty,
-            this.controls.rudder
-        );
     }
 
     /**
@@ -2290,6 +2419,10 @@ class RealisticFlightPhysicsService {
             strobe: false,
             logo: false,
             wing: false,
+            panel: false,
+            background: false,
+            flood: false,
+            dome: false,
             powered: false
         };
         
@@ -2438,7 +2571,7 @@ class RealisticFlightPhysicsService {
         // Failure System Config
         if (this.failureSystem) {
             // Re-initialize failure system with new config if provided
-            const failureConfig = { engineCount: this.aircraft.engineCount };
+            const failureConfig = { engineCount: this.aircraft.engineCount, failureSelection: conditions.failureSelection, failureFlightSeconds: conditions.failureFlightSeconds };
             if (conditions.difficulty) failureConfig.difficulty = conditions.difficulty;
             
             // Only re-create if we have new config, otherwise just reset
@@ -2446,6 +2579,11 @@ class RealisticFlightPhysicsService {
                 this.failureSystem = new FailureHandler(failureConfig);
             } else {
                 this.failureSystem.reset();
+            }
+            if (conditions.failureType && !['none', 'random'].includes(conditions.failureType)) {
+                this.failureSystem.triggerFailure(conditions.failureType, { ...conditions.failureContext });
+                this.failureSystem.applyImpact(this);
+                this.updateSystems(0);
             }
         }
     }
@@ -2478,7 +2616,7 @@ class RealisticFlightPhysicsService {
         this.flightPlan = newWaypoints;
 
         if (incomingIndex !== null) {
-            this.currentWaypointIndex = incomingIndex;
+            this.currentWaypointIndex = Math.max(0, incomingIndex);
         } else if (preserveIndex) {
             this.currentWaypointIndex = oldIndex;
         } else {
@@ -2488,209 +2626,83 @@ class RealisticFlightPhysicsService {
         if (this.currentWaypointIndex >= this.flightPlan.length) {
             this.currentWaypointIndex = Math.max(0, this.flightPlan.length - 1);
         }
+        this.navigationService.updateFlightPlan(newWaypoints, this.currentWaypointIndex);
+        this.navigationService.currentWaypointIndex = this.currentWaypointIndex;
+        if (!newWaypoints.length) this.autopilot.activeWaypointAltitude = undefined;
     }
 
-    loadFlightState(data) {
-        if (!data) return;
-        
-        // console.log('🔄 Loading flight state...', data);
-
-        // 1. Restore Physics State
-        if (data.physicsState) {
-            const ps = data.physicsState;
-            
-            // Position
-            if (ps.position) {
-                // Restore Geo Position
-                if (ps.position.latitude !== undefined) this.state.geo.lat = ps.position.latitude;
-                if (ps.position.longitude !== undefined) this.state.geo.lon = ps.position.longitude;
-                
-                // Restore Local Position (NED)
-                // Note: ps.position.z is Altitude (Positive Up), but state.pos.z is NED (Positive Down)
-                // If saved z was altitude, we negate it.
-                // We check if z seems to be altitude (>0 usually)
-                this.state.pos = new Vector3(
-                    ps.position.x, 
-                    ps.position.y, 
-                    -Math.abs(ps.position.z) // Ensure Z is negative (Up in NED)
-                );
+    loadFlightState(input) {
+        // Validate the entire snapshot before mutating a running flight.
+        const data = validateFlightSave(input);
+        const ps = data.physicsState;
+        const clone = value => JSON.parse(JSON.stringify(value));
+        this.state.geo = { lat: ps.position.latitude, lon: ps.position.longitude };
+        this.state.pos = new Vector3(ps.position.x, ps.position.y, -ps.position.z);
+        this.state.vel = new Vector3(ps.velocity.x ?? ps.velocity.u, ps.velocity.y ?? ps.velocity.v, ps.velocity.z ?? ps.velocity.w);
+        const attitude = ps.orientation;
+        this.state.quat = attitude.w !== undefined
+            ? new Quaternion(attitude.w, attitude.x, attitude.y, attitude.z)
+            : Quaternion.fromEuler(attitude.phi, attitude.theta, attitude.psi);
+        const rates = ps.rates || ps.angularRates || {};
+        this.state.rates = new Vector3(rates.x ?? rates.p ?? 0, rates.y ?? rates.q ?? 0, rates.z ?? rates.r ?? 0);
+        this.state.fuel = ps.fuel ?? data.flightData?.fuel ?? this.state.fuel;
+        this.controls = { ...this.controls, ...clone(ps.controls || {}) };
+        this.controls.engineThrottles = [...(ps.controls?.engineThrottles || ps.controls?.throttles
+            || Array(this.engines.length).fill(this.controls.throttle))];
+        this.throttleCommand = ps.throttleCommand ?? this.controls.throttle;
+        this.engineThrottleCommands = [...(ps.engineThrottleCommands || this.controls.engineThrottles)];
+        this.engines.forEach((engine, index) => {
+            Object.assign(engine.state, ps.engineStates?.[index] || {});
+            for (const key of ['n1', 'n2', 'egt', 'fuelFlow', 'oilPressure', 'vibration']) {
+                if (Number.isFinite(ps.engineParams?.[key]?.[index])) engine.state[key] = ps.engineParams[key][index];
             }
-            
-            // Velocity
-            if (ps.velocity) {
-                // Check if saved as u,v,w (OutputState format) or x,y,z (Direct serialization)
-                if (ps.velocity.u !== undefined) {
-                    this.state.vel = new Vector3(ps.velocity.u, ps.velocity.v, ps.velocity.w);
-                } else {
-                    this.state.vel = new Vector3(ps.velocity.x, ps.velocity.y, ps.velocity.z);
-                }
-            }
-            
-            // Orientation (Quaternion)
-            if (ps.orientation) {
-                // Check if we have quaternion components directly
-                if (ps.orientation.w !== undefined) {
-                    this.state.quat = new Quaternion(ps.orientation.w, ps.orientation.x, ps.orientation.y, ps.orientation.z);
-                } 
-                // Fallback to Euler if only theta/phi/psi available (from view model)
-                else if (ps.orientation.theta !== undefined) {
-                     this.state.quat = Quaternion.fromEuler(ps.orientation.phi, ps.orientation.theta, ps.orientation.psi);
-                }
-            }
-            
-            // Angular Rates
-            if (ps.angularRates) {
-                this.state.rates = new Vector3(ps.angularRates.p, ps.angularRates.q, ps.angularRates.r);
-            } else if (ps.rates) {
-                this.state.rates = new Vector3(ps.rates.x, ps.rates.y, ps.rates.z);
-            } else {
-                this.state.rates = new Vector3(0, 0, 0);
-            }
-
-            // Controls
-            if (ps.controls) {
-                this.controls = { ...this.controls, ...ps.controls };
-                
-                // Ensure engineThrottles array exists and is populated
-                if (!this.controls.engineThrottles || this.controls.engineThrottles.length !== this.aircraft.engineCount) {
-                     this.controls.engineThrottles = Array(this.aircraft.engineCount).fill(this.controls.throttle);
-                     // If we have legacy throttles in ps.controls, try to recover
-                     if (ps.controls.throttles && Array.isArray(ps.controls.throttles)) {
-                         ps.controls.throttles.forEach((val, i) => {
-                             if (i < this.controls.engineThrottles.length) this.controls.engineThrottles[i] = val;
-                         });
-                     }
-                }
-            }
-
-            // Engines (Restore Internal State)
-            if (ps.engineParams) {
-                this.engines.forEach((e, i) => {
-                    if (ps.engineParams.n1 && ps.engineParams.n1[i] !== undefined) e.state.n1 = ps.engineParams.n1[i];
-                    if (ps.engineParams.n2 && ps.engineParams.n2[i] !== undefined) e.state.n2 = ps.engineParams.n2[i];
-                    if (ps.engineParams.egt && ps.engineParams.egt[i] !== undefined) e.state.egt = ps.engineParams.egt[i];
-                    if (ps.engineParams.fuelFlow && ps.engineParams.fuelFlow[i] !== undefined) e.state.fuelFlow = ps.engineParams.fuelFlow[i];
-                    
-                    // Ensure engine running state matches N2
-                    e.running = e.state.n2 > 20;
-                    
-                    // Restore internal throttle command if available, otherwise sync from controls
-                    if (this.controls.engineThrottles[i] !== undefined) {
-                        e.setThrottle(this.controls.engineThrottles[i]);
-                    }
-                });
-                
-                // Set commanded throttle (Legacy Global Fallback removed, relying on loop above)
-            }
-            
-            // Autopilot
-            if (ps.autopilot) {
-                this.autopilot.setEngaged(ps.autopilot.engaged);
-                if (ps.autopilot.mode) this.autopilot.setTargets({ mode: ps.autopilot.mode });
-                // If targets are nested in ps.autopilot.targets or directly in ps.autopilotTargets
-                const targets = ps.autopilot.targets || data.physicsState.autopilotTargets;
-                if (targets) this.autopilot.setTargets(targets);
-                
-                // Restore PID states if available (ps.autopilotDebug might contain them?)
-                // For now, resetting is safer than restoring partial state
-                // this.autopilot.reset(); // Maybe too aggressive?
-            }
-            
-            // Systems
-            if (ps.systems) {
-                this.systems = { ...this.systems, ...ps.systems };
-            }
-            
-            // Fuel
-            if (data.flightData && data.flightData.fuel !== undefined) {
-                this.state.fuel = data.flightData.fuel;
-            }
-        }
-        // Fallback: Restore from Flight Data (View Model)
-        else if (data.flightData) {
-            const fd = data.flightData;
-            
-            if (fd.position) {
-                this.state.pos = new Vector3(fd.position.x, fd.position.y, fd.position.z);
-            }
-            
-            // Estimate orientation from Euler
-            const pitch = (fd.pitch || 0) * Math.PI / 180;
-            const roll = (fd.roll || 0) * Math.PI / 180;
-            const heading = (fd.heading || 0) * Math.PI / 180;
-            this.state.quat = Quaternion.fromEuler(roll, pitch, heading);
-            
-            // Estimate velocity from airspeed/heading
-            // This is lossy but better than nothing
-            const tasMs = (fd.airspeed || 0) * 0.514444;
-            // Assuming level flight aligned with heading
-            const vx = tasMs * Math.cos(pitch) * Math.cos(heading);
-            const vy = tasMs * Math.cos(pitch) * Math.sin(heading);
-            const vz = -tasMs * Math.sin(pitch); // Approximate
-            // We need velocity in Body frame or NED? 
-            // state.vel is Body Frame (FRD).
-            // V_body = [TAS, 0, 0] approx if no slip/AoA
-            this.state.vel = new Vector3(tasMs, 0, 0);
-            
-            this.state.rates = new Vector3(0, 0, 0);
-        }
-
-        // 2. Restore Flight Plan
+            engine.state.running = ps.engineStates?.[index]?.running ?? engine.state.n2 > 20;
+            engine.setThrottle(this.controls.engineThrottles[index] ?? this.controls.throttle);
+        });
+        if (ps.systems) this.systems = { ...this.systems, ...clone(ps.systems) };
+        if (Number.isFinite(ps.airportElevation)) this.airportElevation = ps.airportElevation;
+        this.time = ps.time ?? 0;
+        this.frame = data.flightData?.frame ?? 0;
+        if (ps.environment || data.weatherData) this.setEnvironment(ps.environment || data.weatherData);
+        const geometry = data.runwayGeometry || ps.runwayGeometry;
+        this.setRunwayGeometry(geometry || null);
+        this.setApproachReference(ps.autopilot?.approachReference || null);
         if (data.flightPlan) {
-            this.flightPlan = data.flightPlan;
-            // Try to find nearest waypoint index?
-            // For now reset to 0 or use saved index if available
-            this.currentWaypointIndex = data.flightData?.currentWaypointIndex || 0;
+            this.updateFlightPlan({
+                ...(Array.isArray(data.flightPlan) ? {} : data.flightPlan),
+                waypoints: ps.flightPlan || data.flightPlan?.fms?.activePlan?.waypoints
+                    || data.flightPlan.waypoints || data.flightPlan,
+                currentWaypointIndex: ps.currentWaypointIndex ?? data.flightData?.currentWaypointIndex ?? 0
+            });
         }
-
-        // 3. Reset Crash State & Re-validate Ground Status
+        this.navigationPath = ps.navigationPath || null;
+        if (ps.failureState) this.failureSystem.restoreState(ps.failureState);
+        if (ps.failureParams) this.failureParams = clone(ps.failureParams);
+        if (ps.componentStates && this.systemModel?.componentStore) {
+            for (const [id, state] of Object.entries(ps.componentStates)) {
+                Object.assign(this.systemModel.componentStore.ensure(id), state);
+            }
+        }
+        this.autopilot.setEngaged(false);
+        if (ps.autopilot) {
+            this.autopilot.setTargets({ ...ps.autopilot.targets, mode: ps.autopilot.mode });
+            this.autopilot.setVNAVArmed(ps.autopilot.vnavArmed ?? false);
+            this.autopilot.setAutothrottleArmed(ps.autopilot.autothrottleArmed ?? true);
+            this.autopilot.flightDirectorEnabled = ps.autopilot.flightDirectorEnabled ?? false;
+            this.autopilot.couplingMode = ps.autopilot.couplingMode || 'CMD';
+            this.autopilot.modeSelected = ps.autopilot.modeSelected ?? ps.autopilot.mode !== 'CWS';
+            if (ps.autopilot.navFrequency) this.autopilot.setNavFrequency(ps.autopilot.navFrequency);
+            if (ps.autopilot.navPlan) this.autopilot.setNavigationPlan(ps.autopilot.navPlan);
+            this.autopilot.setEngaged(Boolean(ps.autopilot.engaged));
+        }
+        this.onGround = ps.onGround ?? false;
+        this.currentGroundZ = ps.currentGroundZ ?? this.currentGroundZ;
+        this.groundStatus = ps.groundStatus || { status: 'UNKNOWN', remainingLength: 0 };
         this.crashed = false;
-        this.crashReason = "";
+        this.crashReason = '';
         this.objectCollisionTimer = 0;
-        this.time = data.flightData?.frame ? (data.flightData.frame * 0.016) : 0; // Approximate time
-        
-        // Ensure altitude is safe if we just loaded
-        // If we are "on ground", ensure we aren't underground
-        // groundStatus logic will run next frame, but we need to prevent immediate crash
-        
-        // Recalculate derived state to ensure consistency
-        if (this.state.pos.z > 0) {
-            // NED z is positive down. So positive Z means underground (if ground is 0).
-            // But we treat ground as negative usually? 
-            // Wait, standard NED: Z is Down. Altitude is -Z.
-            // If Altitude is positive, Z is negative.
-            // If Z is positive, we are below sea level (or whatever 0 reference is).
-            // Ground Z is stored in currentGroundZ (NED).
-            // If Z > currentGroundZ, we are underground.
-        }
-
-        // Force ground status update if we have runway geometry
-        // Note: We might be restoring to a point where we don't have the geometry loaded yet?
-        // Ideally we should save runwayGeometry too.
-        if (data.runwayGeometry) {
-            this.runwayGeometry = data.runwayGeometry;
-        }
-        
-        // Reset ground status to avoid immediate "unsafe altitude" trigger
-        // We'll let the next update loop figure out the real status
-        // But if we are low, we must ensure we don't crash instantly.
-        const altitude = -this.state.pos.z;
-        if (altitude < 100) { // If low altitude
-             // Check if we assume on ground?
-             // If velocity is low, assume on ground
-             if (this.state.vel.magnitude() < 40) {
-                 this.onGround = true;
-             } else {
-                 this.onGround = false;
-             }
-        } else {
-            this.onGround = false;
-        }
-        
-        // Explicitly clear ground status to force re-evaluation without carrying over 'unsafe' state
-        this.groundStatus = { status: 'UNKNOWN', remainingLength: 0 };
-        
-        console.log('✅ Flight state loaded. Crash state reset.');
+        this.sessionContext = data.session || this.sessionContext;
+        return this.getOutputState();
     }
 
     getFlapIncrements() {
@@ -2832,6 +2844,15 @@ class RealisticFlightPhysicsService {
     getAutopilotStatus() {
         return {
             engaged: this.autopilot.engaged,
+            approachReference: this.autopilot.runwayGeometry,
+            nav1Frequency: this.autopilot.nav1Frequency,
+            flightDirectorEnabled: this.autopilot.flightDirectorEnabled,
+            couplingMode: this.autopilot.couplingMode,
+            flightDirector: {
+                enabled: this.autopilot.flightDirectorEnabled,
+                targetPitch: this.autopilot.debugState.targetPitch,
+                targetRoll: this.autopilot.debugState.targetRoll
+            },
             mode: this.autopilot.mode,
             targets: this.autopilot.targets,
             vnavArmed: this.autopilot.vnavArmed,

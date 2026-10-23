@@ -1,3 +1,4 @@
+import { loadInstalledAipPack } from '../aipPackStorage.js';
 import { fetchFlightPlanDbRoute } from './adapters/flightPlanDbAdapter.js';
 import { fetchProcedureData } from './adapters/procedureDataAdapter.js';
 import { fetchFaaCifpProcedures } from './adapters/faaCifpAdapter.js';
@@ -240,7 +241,8 @@ export const generateUnifiedRoute = async ({
     return null;
   };
 
-  if (aipProviderMode !== AIP_PROVIDER_MODES.REMOTE_FIRST && aipProviderMode !== AIP_PROVIDER_MODES.EXTERNAL_ONLY) {
+  const installedAip = await loadInstalledAipPack();
+  if ((installedAip || aipProviderMode !== AIP_PROVIDER_MODES.REMOTE_FIRST) && aipProviderMode !== AIP_PROVIDER_MODES.EXTERNAL_ONLY) {
     const localRoute = await tryLocalAip();
     if (localRoute) {
       setCachedRoute(cacheKey, localRoute);
@@ -261,7 +263,7 @@ export const generateUnifiedRoute = async ({
     }
   }
 
-  if (aipProviderMode === AIP_PROVIDER_MODES.REMOTE_FIRST) {
+  if (!installedAip && aipProviderMode === AIP_PROVIDER_MODES.REMOTE_FIRST) {
     const localRoute = await tryLocalAip();
     if (localRoute) {
       setCachedRoute(cacheKey, localRoute);

@@ -1,5 +1,5 @@
 .cockpit-pilot-overlay { --captain-axis:21.5%; --first-officer-axis:78.5%; --yoke-top:65%; --pedals-top:101%; position:absolute; inset:0; z-index:4; pointer-events:none; }
-.cockpit-yoke { position:absolute; width:17%; height:auto; overflow:visible; pointer-events:none; touch-action:none; cursor:grab; filter:drop-shadow(4px 7px 3px #000a); }
+.cockpit-yoke { position:absolute; width:17%; height:auto; overflow:visible; pointer-events:auto; touch-action:none; cursor:grab; filter:drop-shadow(4px 7px 3px #000a); }
 .cockpit-yoke > path,.cockpit-yoke > g { pointer-events:visiblePainted; }
 .cockpit-yoke[aria-disabled=true] { cursor:default; }
 .cockpit-yoke-captain { left:calc(var(--captain-axis) - 8.5%); top:var(--yoke-top); }
@@ -27,3 +27,15 @@
 .cockpit-pilot-side { position:relative; width:174px; min-height:255px; }
 .cockpit-pilot-side .cockpit-yoke { width:140px; left:17px; top:0; }
 .cockpit-pilot-side .cockpit-pedals { left:0; top:160px; width:174px; padding:15px 12px 0; }
+
+/* Airbus sidesticks sit outboard of each pilot, with a fixed gimbal and a
+   complete grip/shaft assembly that tilts about its base. */
+.cockpit-sidestick{position:absolute;width:10%;height:auto;overflow:visible;pointer-events:auto;touch-action:none;cursor:grab;filter:drop-shadow(3px 5px 3px #0008)}
+.cockpit-sidestick > path,.cockpit-sidestick > g,.cockpit-sidestick > ellipse{pointer-events:visiblePainted}
+.cockpit-sidestick[aria-disabled=true]{cursor:default}
+.cockpit-sidestick-captain{left:0;top:83%}
+.cockpit-sidestick-first-officer{right:0;top:83%}
+.sidestick-moving{transform-style:preserve-3d}
+.has-sidesticks{--pedals-top:103%}
+.aircraft-main-panel.has-airbus-controls .aircraft-main-panel-scroll{padding-bottom:max(135px,17%)}
+.cockpit-pilot-side .cockpit-sidestick{left:0;top:0;width:120px}

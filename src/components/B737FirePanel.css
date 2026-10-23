@@ -1,0 +1,23 @@
+.b737-fire-panel {
+  margin: 12px 0 4px;
+  padding: 12px;
+  border: 2px solid #191d1d;
+  border-radius: 5px;
+  background: #424a4c;
+  color: #f3eee0;
+  font: 11px monospace;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.b737-fire-heading { text-align: center; margin-bottom: 10px; letter-spacing: .1em; }
+.b737-fire-handles { display: flex; justify-content: space-around; gap: 10px; }
+.b737-fire-station { flex: 1; min-width: 0; text-align: center; }
+.b737-fire-panel button { cursor: pointer; font: bold 10px monospace; color: #eee; }
+.b737-fire-handle { width: 100%; min-height: 48px; border: 3px solid #1d2223; border-radius: 5px; background: #651b1b; }
+.b737-fire-handle span, .b737-fire-discharge span { display: block; font-size: 9px; margin-top: 4px; }
+.b737-fire-handle.pulled { transform: translateY(-5px); border-color: #ddd0ad; box-shadow: 0 5px 0 #202426; }
+.b737-fire-handle.fire-detected { background: #ff3636; color: #170000; box-shadow: 0 0 12px #ff3030; }
+.b737-fire-discharge { display: flex; gap: 4px; margin-top: 10px; }
+.b737-fire-discharge button { flex: 1; padding: 5px 2px; background: #252c2e; border: 1px solid #9b9e91; border-radius: 3px; }
+.b737-fire-panel button:disabled { cursor: default; opacity: .5; }
+.b737-bottle-status { display: flex; justify-content: space-around; margin-top: 10px; color: #efc56a; font-size: 9px; }

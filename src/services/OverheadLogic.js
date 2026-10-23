@@ -92,9 +92,18 @@ class OverheadLogic {
                 nav: false,
                 logo: false,
                 wing: false,
+                panel: false,
+                background: false,
+                flood: false,
+                dome: false,
                 emergencyLights: true // Armed
             };
         }
+
+        systems.lighting.panel ??= false;
+        systems.lighting.background ??= false;
+        systems.lighting.flood ??= false;
+        systems.lighting.dome ??= false;
 
         // Initialize Comms & Transponder
         if (!systems.comms) {
@@ -802,6 +811,7 @@ class OverheadLogic {
                     
                     // Cutoff Systems
                     systems.engines[engId].fuelControl = false;
+                    systems.pressurization[`bleed${index + 1}`] = false;
                     systems.electrical[`gen${index+1}`] = false;
                     
                     // Cutoff Hydraulics?
@@ -839,41 +849,23 @@ class OverheadLogic {
             systems.electrical.apuGen = false;
         }
 
-        const dischargeRate = 50 * dt; // Empty in 2 seconds
-        
-        // Helper to extinguish fires if handle is pulled
-        const extinguishEngines = () => {
-             Object.keys(systems.fire).forEach(key => {
-                if (key.match(/^eng\d+Handle$/) && systems.fire[key]) {
-                    const engId = key.replace('Handle', '');
-                    systems.fire[engId] = false;
-                }
-             });
-        };
-
-        if (systems.fire.bottle1_discharge) {
-            if (systems.fire.bottle1 > 0) {
-                systems.fire.bottle1 -= dischargeRate;
-                extinguishEngines();
-            } else {
-                systems.fire.bottle1 = 0;
-                systems.fire.bottle1_discharge = false; // Reset trigger
+        const fire = systems.fire;
+        fire.apuBottle ??= 100; // Older saves predate the dedicated APU bottle.
+        const dischargeRate = 50 * dt;
+        for (const bottle of ['bottle1', 'bottle2', 'apuBottle']) {
+            if (!fire[`${bottle}_discharge`]) continue;
+            const target = fire[`${bottle}_target`];
+            if (!target || !(fire[bottle] > 0)) {
+                fire[`${bottle}_discharge`] = false;
+                continue;
             }
-        }
-
-        if (systems.fire.bottle2_discharge) {
-            if (systems.fire.bottle2 > 0) {
-                systems.fire.bottle2 -= dischargeRate;
-                extinguishEngines();
-            } else {
-                systems.fire.bottle2 = 0;
-                systems.fire.bottle2_discharge = false;
+            fire[bottle] = Math.max(0, fire[bottle] - dischargeRate);
+            if (dt > 0 && fire[`${target}Handle`] && fire[target]) {
+                fire[target] = false;
+                fire.extinguishCount ??= {};
+                fire.extinguishCount[target] = (fire.extinguishCount[target] || 0) + 1;
             }
-        }
-        
-        // APU Bottle
-        if (systems.fire.apuHandle && (systems.fire.bottle1_discharge || systems.fire.bottle2_discharge)) {
-             systems.fire.apu = false;
+            if (fire[bottle] === 0) fire[`${bottle}_discharge`] = false;
         }
     }
 }

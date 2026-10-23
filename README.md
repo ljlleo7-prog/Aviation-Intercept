@@ -331,8 +331,8 @@ For the best current experience:
 ## Project Structure
 
 For a detailed technical deep-dive, refer to:
-- [**PROJECT_OVERVIEW.md**](./PROJECT_OVERVIEW.md): High-level architecture and design philosophy.
-- [**CODE_REFERENCE.md**](./CODE_REFERENCE.md): Detailed API documentation for classes and services.
+- [**PROJECT_OVERVIEW.md**](./docs/reference/PROJECT_OVERVIEW.md): High-level architecture and design philosophy.
+- [**CODE_REFERENCE.md**](./docs/reference/CODE_REFERENCE.md): Detailed API documentation for classes and services.
 
 ```text
 src/
@@ -374,3 +374,7 @@ src/
 ## License
 
 This project is licensed under the MIT License.
+
+## Release preparation
+
+The planned host is https://aviation.geeksproductionstudio.com/. Deployment is manual-only while optional features are in progress. See [release preparation](./docs/RELEASE_PREPARATION.md) for local builds, separate optional packs, and remaining release gates. `npm run stage:release` only creates local review artifacts.

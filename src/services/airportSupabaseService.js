@@ -1,7 +1,7 @@
-import { supabase } from './aviationIntercept/SupabaseClient.js';
+import { callAipRpc } from './aipRpcClient.js';
+import { queryInstalledAip } from './localAipData.js';
 
-const ok = (dataKey, value) => ({ status: 'ok', [dataKey]: value });
-const unavailable = (message) => ({ status: 'unavailable', message });
+const ok = (dataKey, value, response) => ({ status: 'ok', [dataKey]: value, billing: response.billing, source: response.source, cached: response.cached });
 
 const normalizeFrequency = (frequency = {}) => ({
   type: frequency.type || frequency.description || 'UNKNOWN',
@@ -42,10 +42,8 @@ export const normalizeSupabaseAirport = (airport = {}) => ({
 });
 
 const rpc = async (name, params) => {
-  if (!supabase) return unavailable('Supabase is not configured.');
-  const { data, error } = await supabase.rpc(name, params);
-  if (error) return { status: 'provider_failed', message: error.message || `${name} failed.` };
-  return data || unavailable(`${name} returned no data.`);
+  const local = await queryInstalledAip(name, params);
+  return local || callAipRpc(name, params);
 };
 
 export const searchSupabaseAirports = async (query, options = {}) => {
@@ -55,7 +53,7 @@ export const searchSupabaseAirports = async (query, options = {}) => {
     p_include_emergency: options.includeEmergency !== false
   });
   if (response.status !== 'ok') return response;
-  return ok('airports', (response.airports || []).map(normalizeSupabaseAirport));
+  return ok('airports', (response.airports || []).map(normalizeSupabaseAirport), response);
 };
 
 export const getSupabaseAirportsWithinRadius = async (latitude, longitude, radiusNm, options = {}) => {
@@ -66,7 +64,7 @@ export const getSupabaseAirportsWithinRadius = async (latitude, longitude, radiu
     p_limit: options.limit || 50
   });
   if (response.status !== 'ok') return response;
-  return ok('airports', (response.airports || []).map(normalizeSupabaseAirport));
+  return ok('airports', (response.airports || []).map(normalizeSupabaseAirport), response);
 };
 
 export const getSupabaseAirportDetails = async (code) => {
@@ -74,7 +72,7 @@ export const getSupabaseAirportDetails = async (code) => {
     p_airport_code: code || ''
   });
   if (response.status !== 'ok') return response;
-  return ok('airport', normalizeSupabaseAirport(response.airport || {}));
+  return ok('airport', normalizeSupabaseAirport(response.airport || {}), response);
 };
 
 export const findSupabaseEmergencyLandingOptions = async ({
@@ -102,7 +100,7 @@ export const findSupabaseEmergencyLandingOptions = async ({
     suitabilityScore: option.suitabilityScore ?? null,
     frequencies: Array.isArray(option.frequencies) ? option.frequencies.map(normalizeFrequency) : [],
     navaids: Array.isArray(option.navaids) ? option.navaids : []
-  })));
+  })), response);
 };
 
 export const getSupabaseNavaidsNearRoute = async ({ latitude, longitude, radiusNm = 150, limit = 10 } = {}) => {
@@ -113,5 +111,5 @@ export const getSupabaseNavaidsNearRoute = async ({ latitude, longitude, radiusN
     p_limit: limit
   });
   if (response.status !== 'ok') return response;
-  return ok('navaids', response.navaids || []);
+  return ok('navaids', response.navaids || [], response);
 };

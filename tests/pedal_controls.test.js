@@ -2,8 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import RealisticFlightPhysicsService from '../src/services/RealisticFlightPhysicsService.js';
-import GroundInteractionService from '../src/services/physics/GroundInteractionService.js';
-import { Quaternion, Vector3 } from '../src/utils/flightMath.js';
+import { Quaternion } from '../src/utils/flightMath.js';
 import { installDeterministicRandom } from './support/deterministicRandom.js';
 
 const require = createRequire(import.meta.url);
@@ -50,17 +49,19 @@ test('toe brake pressure clamps invalid and out-of-range inputs', () => {
   }
 });
 
-test('runway assistance preserves taxi heading and yields to deliberate rudder input', () => {
-  const ground = new GroundInteractionService();
-  const state = { geo: { lat: 0, lon: 0.0001 }, quat: Quaternion.fromEuler(0, 0, 0.3), vel: new Vector3(5, 1, 0), rates: new Vector3(0, 0, 0.1), mass: 70000 };
-  const heading = state.quat.toEuler().psi;
-  assert.equal(ground.applyRunwayStabilizer(state, runway, true, { status: 'RUNWAY' }, 'rookie'), null);
-  assert.ok(Math.abs(state.quat.toEuler().psi - heading) < 1e-10);
-  assert.equal(state.vel.y, 1);
-  state.vel.x = 30;
-  ground.applyRunwayStabilizer(state, runway, true, { status: 'RUNWAY' }, 'rookie', 0.2);
-  assert.ok(Math.abs(state.quat.toEuler().psi - heading) < 1e-10);
-  assert.ok(ground.applyRunwayStabilizer(state, runway, true, { status: 'RUNWAY' }, 'intermediate', 0));
+test('ground forces do not pull an offset aircraft toward the runway centerline', () => {
+  for (const difficulty of ['rookie', 'intermediate', 'professional']) {
+    const physics = createGroundPhysics();
+    physics.difficulty = difficulty;
+    physics.state.vel.set(30, 0, 0);
+    const environment = physics.calculateEnvironment(physics.state.pos.z);
+    physics.state.geo.lon = 0.0001;
+    const right = physics.calculateAerodynamicsAndGround(environment, 1 / 300);
+    physics.state.geo.lon = -0.0001;
+    const left = physics.calculateAerodynamicsAndGround(environment, 1 / 300);
+    assert.equal(right.forces.y, left.forces.y);
+    assert.equal(right.moments.z, left.moments.z);
+  }
 });
 
 test('left and right rudder produce opposite nosewheel steering and turning moments', () => {

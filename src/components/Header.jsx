@@ -3,7 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
 const Header = ({ devMode, setDevMode, handleDevStart }) => {
-  const { t } = useLanguage();
+  const { t, tx } = useLanguage();
   const { user, authAvailable, signOut, signInWithSSO } = useAuth();
 
   const handleLogin = () => {
@@ -36,17 +36,17 @@ const Header = ({ devMode, setDevMode, handleDevStart }) => {
           <>
             <span style={{ color: '#cbd5e1', alignSelf: 'center' }}>{user.email}</span>
             <button onClick={handleLogout} style={{ backgroundColor: '#334155', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
-              Sign Out
+              {tx("Sign Out")}
             </button>
           </>
         ) : (
           <>
             <button onClick={handleLogin} style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
-              Login
+              {tx("Login")}
             </button>
             {authAvailable && (
               <button onClick={handleQuickSso} style={{ backgroundColor: '#1f2937', color: 'white', border: '1px solid #475569', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
-                SSO Sign in
+                {tx("SSO Sign in")}
               </button>
             )}
           </>
@@ -67,7 +67,7 @@ const Header = ({ devMode, setDevMode, handleDevStart }) => {
             fontSize: '12px'
           }}
         >
-          {devMode ? '🔧 Dev Mode: ON' : '🔧 Dev Mode: OFF'}
+          {devMode ? tx('🔧 Dev Mode: ON') : tx('🔧 Dev Mode: OFF')}
         </button>
       </div>
 
@@ -87,7 +87,7 @@ const Header = ({ devMode, setDevMode, handleDevStart }) => {
               fontWeight: 'bold'
             }}
           >
-            🚀 Quick Start Physics Test
+            {tx("\ud83d\ude80 Quick Start Physics Test")}
           </button>
         </div>
       )}

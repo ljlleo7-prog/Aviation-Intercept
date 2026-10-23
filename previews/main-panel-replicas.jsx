@@ -1,4 +1,9 @@
 /* eslint-disable react/prop-types */
+import ReplicaAlertMessages from '../src/components/ReplicaAlertMessages.jsx';
+import ReplicaAlertButton from '../src/components/ReplicaAlertButton.jsx';
+import ReplicaLightingControl from '../src/components/ReplicaLightingControl.jsx';
+import PFDApproachGuidance from '../src/components/PFDApproachGuidance.jsx';
+import PFDFlightDirector from '../src/components/PFDFlightDirector.jsx';
 import { useState } from 'react';
 import { InstrumentDataContext, useInstrumentData, routeGeometry, Label, Screw, Plate, Knob, Push, Toggle, Dial, LivePFD as PFD, ND } from './main-panel-parts.jsx';
 import AdditionalPanel from './main-panel-additional-replicas.jsx';
@@ -44,7 +49,7 @@ function Display({ x, y, w, h = w, children, label, viewWidth=120, viewHeight=12
 
 function RotatingCompassRim({ heading=0, cx=69, cy=116, radius=88 }) {
   const normalized=((Number(heading)||0)%360+360)%360;
-  return <g pointerEvents="none"><path d={`M${cx-radius} ${cy}a${radius} ${radius} 0 0 1 ${radius*2} 0`} fill="none" stroke="#080711" strokeWidth="13"/><g transform={`rotate(${-normalized} ${cx} ${cy})`}>{seq(36).map(i=>{const angle=i*10;return <g key={angle} transform={`rotate(${angle} ${cx} ${cy})`}><path d={`M${cx} ${cy-radius}v${i%3===0?7:4}`} stroke="#eef2ed" strokeWidth={i%3===0?1:.6}/>{i%3===0&&<text x={cx} y={cy-radius+13} textAnchor="middle" transform={`rotate(${-angle+normalized} ${cx} ${cy-radius+13})`} style={{fontSize:5,fill:'#eef2ed'}}>{angle/10}</text>}</g>;})}</g><path d={`m${cx} ${cy-radius-2}-4 7h8z`} fill="#f0d978"/></g>;
+  return <g className="screen" pointerEvents="none"><path d={`M${cx-radius} ${cy}a${radius} ${radius} 0 0 1 ${radius*2} 0`} fill="none" stroke="#080711" strokeWidth="13"/><g transform={`rotate(${-normalized} ${cx} ${cy})`}>{seq(36).map(i=>{const angle=i*10;return <g key={angle} transform={`rotate(${angle} ${cx} ${cy})`}><path d={`M${cx} ${cy-radius}v${i%3===0?7:4}`} stroke="#eef2ed" strokeWidth={i%3===0?1:.6}/>{i%3===0&&<text x={cx} y={cy-radius+13} textAnchor="middle" transform={`rotate(${-angle+normalized} ${cx} ${cy-radius+13})`} style={{fontSize:5,fill:'#eef2ed'}}>{angle/10}</text>}</g>;})}</g><path d={`m${cx} ${cy-radius-2}-4 7h8z`} fill="#f0d978"/></g>;
 }
 
 function FlightDisplay({ x,y,size=140,nav=false }) {
@@ -72,12 +77,9 @@ function BoeingMCP({ x=410,y=17,w=375,classic=false }) {
   const [channel,setChannel]=useState('A');
   const targets=replicaTargets(d); const action=d.onAutopilotAction;
   const activateChannel=(kind,letter)=>{
-    if(d.autopilot&&channel===letter&&(kind==='CWS'?d.autopilotMode==='CWS':d.autopilotMode!=='CWS')){action?.('toggle-autopilot');return;}
+    if(d.autopilot&&channel===letter&&(d.couplingMode||'CMD')===kind){action?.('toggle-autopilot');return;}
     setChannel(letter);
-    if(kind==='CWS'){
-      action?.('set-autopilot-mode','CWS');
-      action?.('set-autopilot-targets',{ias:d.ias||targets.ias,heading:d.heading||targets.heading,altitude:d.altitude||targets.altitude,vs:d.verticalSpeed||0});
-    }else if(d.autopilotMode==='CWS') action?.('set-autopilot-mode','HDG');
+    action?.('set-autopilot-coupling',kind);
     if(!d.autopilot) action?.('toggle-autopilot');
   };
   const speed=String(Math.round(targets.ias)); const hdg=String(Math.round(targets.heading)).padStart(3,'0'); const vs=String(Math.round(targets.vs)); const alt=String(Math.round(targets.altitude)).padStart(5,'0');
@@ -89,15 +91,23 @@ function BoeingMCP({ x=410,y=17,w=375,classic=false }) {
     <AutopilotPush x={68} y={51} w={24} h={9} label="APP" active={d.autopilotMode==='ILS'} onActivate={()=>action?.('set-autopilot-mode','ILS')}/>
     <AutopilotPush x={96} y={51} w={24} h={9} label="VNAV" active={d.vnavArmed} onActivate={()=>action?.('toggle-vnav')}/>
     <AutopilotPush x={124} y={51} w={24} h={9} label="A/T" active={d.autothrottleArmed} onActivate={()=>action?.('toggle-autothrottle-arm')}/>
-    <AutopilotPush x={152} y={51} w={24} h={9} label="CMD A" active={d.autopilot&&d.autopilotMode!=='CWS'&&channel==='A'} onActivate={()=>activateChannel('CMD','A')}/>
-    <AutopilotPush x={180} y={51} w={24} h={9} label="CMD B" active={d.autopilot&&d.autopilotMode!=='CWS'&&channel==='B'} onActivate={()=>activateChannel('CMD','B')}/>
-    <AutopilotPush x={208} y={51} w={24} h={9} label="CWS A" active={d.autopilot&&d.autopilotMode==='CWS'&&channel==='A'} onActivate={()=>activateChannel('CWS','A')}/>
-    <AutopilotPush x={236} y={51} w={24} h={9} label="CWS B" active={d.autopilot&&d.autopilotMode==='CWS'&&channel==='B'} onActivate={()=>activateChannel('CWS','B')}/>
+    <AutopilotPush x={264} y={51} w={24} h={9} label="F/D" active={d.flightDirector?.enabled} onActivate={()=>action?.('toggle-flight-director')}/>
+    <AutopilotPush x={152} y={51} w={24} h={9} label="CMD A" active={d.autopilot&&(d.couplingMode||'CMD')==='CMD'&&channel==='A'} onActivate={()=>activateChannel('CMD','A')}/>
+    <AutopilotPush x={180} y={51} w={24} h={9} label="CMD B" active={d.autopilot&&(d.couplingMode||'CMD')==='CMD'&&channel==='B'} onActivate={()=>activateChannel('CMD','B')}/>
+    <AutopilotPush x={208} y={51} w={24} h={9} label="CWS A" active={d.autopilot&&d.couplingMode==='CWS'&&channel==='A'} onActivate={()=>activateChannel('CWS','A')}/>
+    <AutopilotPush x={236} y={51} w={24} h={9} label="CWS B" active={d.autopilot&&d.couplingMode==='CWS'&&channel==='B'} onActivate={()=>activateChannel('CWS','B')}/>
   </Plate>;
 }
 
 function SideLights({ x,y,count=5 }) {
-  return <g transform={`translate(${x} ${y})`} data-component="side-lighting-controls">{seq(count).map(i=><g key={i}><Label x="0" y={i*29-10} className="tiny">{['PNL','FLOOD','MAP','OUTBD','INBD'][i]}</Label><Knob x={0} y={i*29} r={7}/></g>)}</g>;
+  const data = useInstrumentData();
+  return <g transform={`translate(${x} ${y})`} data-component="side-lighting-controls">{seq(count).map(i => <g key={i}>
+    <Label x="0" y={i*29-10} className="tiny">{['PNL','FLOOD','MAP','OUTBD','INBD'][i]}</Label>
+    {i < 2 ? <ReplicaLightingControl label={i === 0 ? 'Panel lighting' : 'Panel flood lighting'} control={i === 0 ? 'panel' : 'flood'} lighting={data.lighting} onAction={data.onAutopilotAction}>
+      <Knob implemented x={0} y={i*29} r={7} angle={data.lighting?.[i === 0 ? 'panel' : 'flood'] ? 45 : -45}/>
+      <rect x="-12" y={i*29-9} width="24" height="22" fill="transparent"/>
+    </ReplicaLightingControl> : <Knob x={0} y={i*29} r={7}/>}
+  </g>)}</g>;
 }
 
 function WarningWing({ x,y,flip=false }) {
@@ -122,13 +132,10 @@ function GaugeFace({ cx,cy,value,label,r=15,green=false,aspect=1 }) {
 }
 
 function WarningColumn({ x=82, y=18, align='left' }) {
-  const rows = [['STATUS','cyan'], ['ENG 1 OIL FILTER','amber'], ['PACK L','amber'], ['APU GEN OFF','amber'], ['FUEL CONFIG','amber']];
+  const data = useInstrumentData();
   return <g data-component="engine-status-column">
     <path d={`M${align==='left'?x-5:x+35} ${y-8}v83`} stroke="#63726a" strokeWidth=".45"/>
-    {rows.map(([text,tone],i)=><g key={text}>
-      {i===0 && <path d={`M${x} ${y+3}h31`} stroke="#63726a" strokeWidth=".45"/>}
-      <Label x={x+15} y={y+i*15} className={`${tone} tiny`}>{text}</Label>
-    </g>)}
+    <ReplicaAlertMessages warnings={data.warnings} x={x} y={y} width={35} rows={7} lineHeight={12}/>
   </g>;
 }
 
@@ -145,7 +152,7 @@ function FourEngineEICAS() {
   const rows=[d.engineN1,d.engineEGT,d.engineN2,d.engineFuelFlow];
   return <><Label x="31" y="7" className="green small">{d.flightPhase || 'CLB'} {Number(d.engineN1?.[0] ?? 98.4).toFixed(1)}</Label><Label x="94" y="7" className="green tiny">LIVE</Label>
     {['N1','EGT','N2','FF'].map((t,row)=><g key={t}><Label x="4" y={20+row*23} className="tiny">{t}</Label>{seq(4).map(i=><g key={i} transform={`translate(${10+i*17} ${14+row*23})`}><rect width="14" height="8" fill="none" stroke="#c0c7bf" strokeWidth=".5"/><Label x="7" y="6" style={{fontSize:4.6}}>{Number(rows[row]?.[i] ?? ['61.1','394','81.5','2.1'][row]).toFixed(row===1?0:1)}</Label><path d="M7 11v9m-3-9h6" stroke="#eee" strokeWidth="1.1"/><path d="M11 11v9" stroke="#687d6c" strokeWidth=".5"/></g>)}</g>)}
-    <FlapSlatColumn/>
+    {d.warnings?.length ? <ReplicaAlertMessages warnings={d.warnings} x={79} y={20} width={38} rows={7} lineHeight={12}/> : <FlapSlatColumn/>}
     <Label x="38" y="113" className="green tiny">TOTAL FUEL {Math.round(d.fuel ?? 82400)}</Label></>;
 }
 
@@ -241,6 +248,7 @@ function AirbusFCU() {
     <AutopilotPush x={222} y={57} w={29} h={6} label="APPR" active={d.autopilotMode==='ILS'} onActivate={()=>action?.('set-autopilot-mode','ILS')}/>
     <AutopilotPush x={257} y={56} w={29} h={9} label="VNAV" active={d.vnavArmed} onActivate={()=>action?.('toggle-vnav')}/>
     <AutopilotPush x={292} y={56} w={29} h={9} label="A/THR" active={d.autothrottleArmed} onActivate={()=>action?.('toggle-autothrottle-arm')}/>
+    <AutopilotPush x={324} y={56} w={20} h={9} label="F/D" active={d.flightDirector?.enabled} onActivate={()=>action?.('toggle-flight-director')}/>
   </Plate>;
 }
 
@@ -248,9 +256,10 @@ function AirbusPFD({ x,y,size=115 }) {
   const d=useInstrumentData();
   const pitch=Math.max(-90,Math.min(90,Number(d.pitch ?? 0))); const roll=((Number(d.roll ?? 0)+180)%360+360)%360-180;
   return <Display x={x} y={y} w={size} label="airbus-primary-flight-display">
-    <Label x="60" y="7" className="green small">{d.fma || 'THR CLB   CLB   NAV'}</Label><Label x="104" y="16" className="tiny">{d.autopilot ? 'AP 1' : '1 FD 2'}</Label>
-    <svg x="22" y="25" width="77" height="70" viewBox="0 0 77 70"><defs><clipPath id={`airbus-attitude-${x}`}><circle cx="38.5" cy="35" r="34"/></clipPath></defs><g clipPath={`url(#airbus-attitude-${x})`}><g transform={`rotate(${-roll} 38.5 35) translate(0 ${pitch*.65})`}><rect x="-50" y="-100" width="177" height="135" fill="#168ed0"/><rect x="-50" y="35" width="177" height="135" fill="#a54529"/>{[-60,-40,-20,-10,0,10,20,40,60].map(n=><g key={n}><path d={`M${n?27:0} ${35+n}h${n?23:77}`} stroke="white" strokeWidth=".8"/><Label x="23" y={37+n} className="tiny">{Math.abs(n)}</Label></g>)}</g><path d="M38 12v45M12 35h53" stroke="#58e37e"/><path d="M9 36h17v4m43-4H51v4" fill="none" stroke="#e5db50" strokeWidth="2"/></g><path d="m38 1-3 5h6z" fill="#ffdc5b"/></svg>
+    <Label x="60" y="7" className="green small">{d.fma || 'THR CLB   CLB   NAV'}</Label><Label x="104" y="16" className="tiny">{d.autopilot ? 'AP 1' : d.flightDirector?.enabled ? '1 FD 2' : ''}</Label>
+    <svg x="22" y="25" width="77" height="70" viewBox="0 0 77 70"><defs><clipPath id={`airbus-attitude-${x}`}><circle cx="38.5" cy="35" r="34"/></clipPath></defs><g clipPath={`url(#airbus-attitude-${x})`}><g transform={`rotate(${-roll} 38.5 35) translate(0 ${pitch*.65})`}><rect x="-50" y="-100" width="177" height="135" fill="#168ed0"/><rect x="-50" y="35" width="177" height="135" fill="#a54529"/>{[-60,-40,-20,-10,0,10,20,40,60].map(n=><g key={n}><path d={`M${n?27:0} ${35+n}h${n?23:77}`} stroke="white" strokeWidth=".8"/><Label x="23" y={37+n} className="tiny">{Math.abs(n)}</Label></g>)}</g><path d="M9 36h17v4m43-4H51v4" fill="none" stroke="#e5db50" strokeWidth="2"/></g><path d="m38 1-3 5h6z" fill="#ffdc5b"/></svg>
     {[4,102].map(a=><g key={a}><rect x={a} y="29" width="13" height="61" fill="#646968"/>{seq(6).map(i=><Label key={i} x={a+6} y={36+i*10} className="tiny">{a===4?180-i*10:600-i*100}</Label>)}<rect x={a-1} y="54" width="15" height="11" fill="#111" stroke="#e3d969" strokeWidth=".6"/><Label x={a+6} y="62" className="small">{a===4?Math.round(d.ias ?? 145):Math.round(d.altitude ?? 100)}</Label></g>)}
+    <g transform="translate(2 4.5)"><PFDFlightDirector director={d.flightDirector} pitch={d.pitch} roll={d.roll} labels={d.labels}/><PFDApproachGuidance ils={d.ils} approachSelected={d.approachSelected} labels={d.labels}/></g>
     <rect x="29" y="105" width="62" height="10" fill="#454a47"/><Label x="60" y="112" className="small">26  27  28  29</Label><Label x="98" y="101" className="cyan tiny">QNH 1013</Label>
   </Display>;
 }
@@ -270,7 +279,7 @@ function ECAM({ lower=false }) {
   </> : <>
     <Label x="99" y="8" className="cyan tiny">{d.flightPhase || 'CLB'}</Label>{[31,82].map((a,i)=><g key={a}><GaugeFace cx={a} cy={22} r={13} value={Number(d.engineN1?.[i] ?? 22.1).toFixed(1)} green/><GaugeFace cx={a} cy={47} r={12} value={Math.round(d.engineEGT?.[i] ?? 416)} green/><Label x={a} y="69" className="green small">{Number(d.engineN2?.[i] ?? 62.8).toFixed(1)}</Label><Label x={a} y="81" className="green small">{Number(d.engineFuelFlow?.[i] ?? .6).toFixed(1)}</Label></g>)}
     {['N1','EGT','N2','FF'].map((t,i)=><Label key={t} x="57" y={23+i*19} className="tiny">{t}</Label>)}
-    <path d="M0 88h120m76 0v32" stroke="#b9c4b3" strokeWidth=".5"/><text x="3" y="96" className="green tiny">FOB: 6420 KG</text><text x="3" y="104" className="green tiny">SEAT BELTS</text><text x="3" y="112" className="green tiny">NO PORTABLE DEVICES</text><text x="80" y="99" className="green tiny">PARK BRK</text><text x="80" y="107" className="green tiny">APU AVAIL</text>
+    <path d="M0 88h120" stroke="#b9c4b3" strokeWidth=".5"/><ReplicaAlertMessages warnings={d.warnings} />
   </>;
 }
 
@@ -287,11 +296,12 @@ function RadioPanel({ x }) {
 }
 
 function Panel320({ enginePage, lowerPage, widebody=false }) {
+  const data = useInstrumentData();
   return <>
     <path d="M12 85 427 9h346l415 76v59l-57 16 25 76 32 32v61h-96v-61H766v100H431V268H106v61H12v-60l34-35 29-74-63-16z" fill="url(#metal)" stroke="#233844" strokeWidth="3"/>
     <path d="M12 79 427 7h346l415 72v11L773 21H427L12 91zM12 131l363-33h453l360 33v14l-359-34H375L12 145z" fill="url(#lip)"/>
     <AirbusFCU/>
-    {[135,830].map(x=><Plate key={x} x={x} y={67} w={233} h={37}><Push x={13} y={13} w={17} h={16}/><Knob x={83} y={21} r={6} dark/><Knob x={134} y={18} r={6} dark/><Push x={202} y={12} w={18} h={14}/></Plate>)}
+    {[135,830].map(x=><Plate key={x} x={x} y={67} w={233} h={37}><ReplicaAlertButton x={13} y={13} w={25} h={16} label="MASTER|WARN" group="warning" data={data}/><Knob x={83} y={21} r={6} dark/><Knob x={134} y={18} r={6} dark/><ReplicaAlertButton x={195} y={12} w={25} h={16} label="MASTER|CAUTION" group="caution" data={data}/></Plate>)}
     <AirbusControls x={105}/><AirbusControls x={1035}/>
     <AirbusPFD x={174} y={143}/><AirbusND x={294} y={143}/><AirbusND x={789} y={143}/><AirbusPFD x={909} y={143}/>
     <Display x={526} y={140} w={131} h={117} label="upper-ecam">{enginePage || <ECAM/>}</Display><Display x={526} y={261} w={131} h={107} label="lower-ecam">{lowerPage || <ECAM lower/>}</Display>
@@ -361,7 +371,7 @@ export function AircraftPanelGraphic({ modelKey, className = 'replica', instrume
   const key = Object.hasOwn(MODELS, modelKey) ? modelKey : '747';
   const model = MODELS[key];
   const Panel = PANELS[key] || AdditionalPanel;
-  return <InstrumentDataContext.Provider value={instrumentData || {}}><svg className={className} viewBox={`0 0 1200 ${model.height}`} role="img" aria-label={`${model.name} main instrument panel`}><Definitions model={model}/><Panel modelKey={key} parts={PARTS}/></svg></InstrumentDataContext.Provider>;
+  return <InstrumentDataContext.Provider value={instrumentData || {}}><svg className={className} viewBox={`0 0 1200 ${model.height}`} role="img" aria-label={`${model.name} main instrument panel`}><Definitions model={model}/><Panel modelKey={key} parts={PARTS}/>{!['757','320','340','350','380','787'].includes(key) && (key === '777' ? [265,865] : [220,900]).map(x => <g key={x}><ReplicaAlertButton x={x} y={key === '777' ? 65 : 35} w={34} h={22} label="MASTER|WARN" group="warning" data={instrumentData}/><ReplicaAlertButton x={x+38} y={key === '777' ? 65 : 35} w={34} h={22} label="MASTER|CAUTION" group="caution" data={instrumentData}/></g>)}</svg></InstrumentDataContext.Provider>;
 }
 
 export default function App() {

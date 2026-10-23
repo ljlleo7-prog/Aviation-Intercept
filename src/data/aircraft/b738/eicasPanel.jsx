@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArcGauge, WarningsList, BoxVal } from '../../../components/eicas/shared.jsx';
+import { ArcGauge, BoxVal } from '../../../components/eicas/shared.jsx';
 
 const AMB = '#ffcc00';
 const WHT = '#ffffff';
@@ -25,8 +25,6 @@ const EICASPanel = ({ flightState }) => {
   const engineThrottles = Array.isArray(flightState?.engineThrottles) ? flightState.engineThrottles : [flightState?.throttle ?? 0, flightState?.throttle ?? 0];
   const reverseActive = [0, 1].map(i => (engineThrottles[i] ?? 0) < 0);
   const fuel = flightState?.fuel || 0;
-  const warnings = flightState?.activeWarnings || [];
-  const crashWarning = flightState?.crashWarning || '';
   const startValveOpen  = flightState?.startValveOpen  || [false, false];
   const oilFilterBypass = flightState?.oilFilterBypass || [false, false];
   const lowOilPressure  = flightState?.lowOilPressure  || [false, false];
@@ -85,7 +83,6 @@ const EICASPanel = ({ flightState }) => {
           <div style={{ marginTop: 'auto', paddingTop: '6px', fontSize: '10px', color: '#ffaa00', textAlign: 'center' }}>
             FUEL {fuel.toFixed(0)} KG
           </div>
-          <WarningsList warnings={warnings} crashWarning={crashWarning} />
         </div>
 
       </div>

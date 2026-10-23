@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { airportBuildingLayout, papiColors, runwayLightLayout } from '../src/utils/outsideAirportScenery.js';
-import { createAirportBuildings, createRunwayLighting } from '../src/services/outsideAirportVisuals.js';
+import { createAirportBuildings, createRunwayLighting, createRunwayMarkings } from '../src/services/outsideAirportVisuals.js';
 
 test('runway lighting provides approach, threshold, edge, end, and four PAPI lamps', () => {
   const { lights, papi } = runwayLightLayout(3000, 45);
@@ -11,6 +11,16 @@ test('runway lighting provides approach, threshold, edge, end, and four PAPI lam
   assert.ok(lights.some((light) => light.z === 0 && light.color === 0x40ff80));
   assert.ok(lights.some((light) => light.z === -3000 && light.color === 0xff3830));
   assert.ok(lights.some((light) => light.x === 23.5 && light.z < 0));
+});
+
+test('all runway markings share one geometry and material per runway', () => {
+  const parent = new THREE.Group(); const paint = new THREE.MeshBasicMaterial();
+  const mesh = createRunwayMarkings(parent, 4000, 60, paint);
+  assert.equal(parent.children.length, 1);
+  assert.equal(mesh.material, paint);
+  assert.ok(mesh.geometry.attributes.position.count > 300);
+  assert.ok(mesh.geometry.attributes.position.array.every(Number.isFinite));
+  mesh.geometry.dispose(); paint.dispose();
 });
 
 test('PAPI shows low, on-slope, high and no reverse/side indication', () => {

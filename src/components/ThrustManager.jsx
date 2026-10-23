@@ -1,11 +1,10 @@
+import { isReverseThrustCommand } from '../utils/pedestalControls.js';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const REVERSE_IDLE_LEVER = 0.19;
 const FORWARD_IDLE_LEVER = 0.21;
 const REVERSE_DETENT = 0.2;
 const MODE_HYSTERESIS = 0.015;
-const REVERSE_SYNC_THRESHOLD = -0.05;
-const FORWARD_SYNC_THRESHOLD = 0.02;
 const MANUAL_SYNC_LOCK_MS = 1200;
 
 const ThrustManager = ({ controlThrust, flightState, onSystemAction }) => {
@@ -13,6 +12,7 @@ const ThrustManager = ({ controlThrust, flightState, onSystemAction }) => {
     Array.isArray(flightState?.engineN1) ? flightState.engineN1.length :
     Array.isArray(flightState?.engineN2) ? flightState.engineN2.length : 2;
 
+  const engineCommands = flightState?.engineThrottleCommands ?? flightState?.engineThrottles;
   const initial = Array(engineCount).fill(REVERSE_DETENT);
   const [throttles, setThrottles] = useState(initial);
   const [reverse, setReverse] = useState(Array(engineCount).fill(false));
@@ -37,11 +37,7 @@ const ThrustManager = ({ controlThrust, flightState, onSystemAction }) => {
     return previousMode;
   }, []);
 
-  const deriveReverseFromCommand = useCallback((command, previousMode = false) => {
-    if (command <= REVERSE_SYNC_THRESHOLD) return true;
-    if (command >= FORWARD_SYNC_THRESHOLD) return false;
-    return previousMode;
-  }, []);
+  const deriveReverseFromCommand = useCallback(isReverseThrustCommand, []);
 
   const mapCommandToLever = useCallback((command) => {
     const cmd = typeof command === 'number' ? command : 0;
@@ -53,8 +49,8 @@ const ThrustManager = ({ controlThrust, flightState, onSystemAction }) => {
     if (isDraggingRef.current.some(d => d)) return;
     if (Date.now() - lastManualThrottleChangeRef.current < MANUAL_SYNC_LOCK_MS) return;
 
-    if (Array.isArray(flightState?.engineThrottles)) {
-      const commands = flightState.engineThrottles.map(v => (typeof v === 'number' ? v : 0));
+    if (Array.isArray(engineCommands)) {
+      const commands = engineCommands.map(v => (typeof v === 'number' ? v : 0));
       const values = commands.map(mapCommandToLever);
       if (values.length === engineCount) {
         const nextReverse = values.map((_, index) => deriveReverseFromCommand(commands[index], reverseRef.current[index] ?? false));
@@ -86,7 +82,7 @@ const ThrustManager = ({ controlThrust, flightState, onSystemAction }) => {
         setReverse(nextReverse);
       }
     }
-  }, [flightState?.engineThrottles, flightState?.throttle, engineCount, deriveReverseFromCommand, mapCommandToLever, throttles]);
+  }, [engineCommands, flightState?.throttle, engineCount, deriveReverseFromCommand, mapCommandToLever, throttles]);
 
   const mapLeverToCommand = (lever) => {
     const v = Math.max(0, Math.min(1, lever));

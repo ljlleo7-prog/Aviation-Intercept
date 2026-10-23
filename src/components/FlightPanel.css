@@ -1346,3 +1346,9 @@
 .crash-warning-flash {
   animation: flashBlink 0.2s 3 !important;
 }
+
+/* Electrical power blanks emissive displays while keeping physical controls available. */
+.cockpit-no-power .aircraft-panel-svg .screen,.cockpit-no-power .aircraft-panel-svg .digits{visibility:hidden}
+.cockpit-no-power .aircraft-main-panel-legacy-central{visibility:hidden}
+.cockpit-no-power .main-panels > *{position:relative}
+.cockpit-no-power .main-panels > *::after{content:"";position:absolute;inset:0;background:#030405;pointer-events:none}

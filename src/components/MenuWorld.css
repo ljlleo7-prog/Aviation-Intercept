@@ -1,0 +1,58 @@
+.menu-world {
+  --menu-surface: #0c1825d9;
+  --menu-border: #a6bfd02b;
+  --menu-accent: #d5b28a;
+  position: relative;
+  isolation: isolate;
+  background: #080f19;
+}
+
+/* Keep the horizon in the viewport as long content scrolls over it. */
+.menu-world::before,
+.menu-world::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.menu-world::before {
+  background:
+    radial-gradient(ellipse 90% 44% at 50% 112%, #090f1b 94%, #d5b28a66 94.3%, transparent 94.6%),
+    radial-gradient(ellipse at 50% 85%, #365665, #172937 28%, #080f19 70%);
+}
+
+.menu-world::after {
+  background: radial-gradient(circle at 52% 80%, transparent 57%, #a5cfe31c 57.1%, transparent 57.2%);
+}
+
+.app-entry .app-header,
+.app-entry .app-footer {
+  background: #0c182588;
+  border-color: var(--menu-border);
+}
+
+.app-entry .app-header h1 {
+  color: var(--menu-accent);
+  text-shadow: none;
+}
+
+.app-entry .app-main {
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 960px;
+  margin-inline: auto;
+  background: var(--menu-surface);
+  border-inline: 1px solid var(--menu-border);
+}
+
+.menu-settings-overlay {
+  background: #080f19b3;
+  backdrop-filter: blur(12px);
+}
+
+.menu-settings-panel {
+  background: linear-gradient(145deg, #1b2e3b, #0c1825);
+  border: 1px solid #a6bfd040;
+}

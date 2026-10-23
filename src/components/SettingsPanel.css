@@ -1,0 +1,26 @@
+.display-settings { display: grid; gap: 16px; }
+.settings-section { padding: 14px; background: #101e2b; border: 1px solid #536879; border-radius: 10px; }
+.settings-section h4 { margin: 0 0 14px; color: #ead1af; font-size: 15px; }
+.settings-section label { display: grid; gap: 7px; margin-top: 12px; font-size: 14px; font-weight: 600; }
+.settings-section select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #697d8e; border-radius: 6px; background: #08131e; color: #f9fafb; font: inherit; }
+.settings-section p { margin: 8px 0 12px; color: #bccbd7; line-height: 1.6; font-size: 12px; }
+.settings-section details { margin-top: 14px; }
+.settings-section summary { cursor: pointer; }
+.homepage-content > .settings-section { width: min(100%, 650px); box-sizing: border-box; margin-top: 24px; text-align: left; }
+.settings-section button { min-height: 36px; padding: 6px 12px; background: #203747; border: 1px solid #91acbd; border-radius: 5px; color: #fff; cursor: pointer; }
+.settings-section button:disabled { opacity: .5; cursor: default; }
+.settings-section input[type="file"] { max-width: 100%; min-width: 0; font: inherit; font-size: 12px; }
+.settings-section li { overflow-wrap: anywhere; margin-bottom: 14px; }
+.settings-section :focus-visible, .menu-settings-panel :focus-visible, .flight-settings-panel :focus-visible { outline: 3px solid #80d9f5; outline-offset: 3px; }
+.menu-settings-panel, .flight-settings-panel { max-height: calc(100dvh - 96px); overflow-y: auto; box-sizing: border-box; }
+.menu-settings-panel > .display-settings { margin-bottom: 20px; }
+html[data-contrast="high"] .settings-section { background: #000; border-color: #fff; }
+html[data-contrast="high"] .settings-section :is(h4, p, label, summary) { color: #fff; }
+html[data-contrast="high"] .settings-section select { background: #000; border-color: #fff; }
+html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-motion="system"] *, html[data-motion="system"] *::before, html[data-motion="system"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+@media (max-width: 600px) {
+  .flight-settings-panel { left: 12px !important; width: calc(100vw - 24px) !important; }
+}

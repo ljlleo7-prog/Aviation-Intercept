@@ -1,6 +1,7 @@
+import { estimateFailureFlightSeconds } from '../config/flightFailures.js';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import RealisticFlightPhysicsService from '../services/RealisticFlightPhysicsService.js';
-import { loadAircraftData } from '../services/aircraftService.js';
+import aircraftService, { loadAircraftData } from '../services/aircraftService.js';
 import { airportService } from '../services/airportService.js';
 import { usePhysicsLoop } from './usePhysicsLoop.js';
 import { useFlightControls } from './useFlightControls.js';
@@ -60,7 +61,9 @@ export function useAircraftPhysics(launchConfig = {}, autoStart = true) {
         if (cancelled) return;
 
 
-        const aircraft = db?.find(a => a.model === config.aircraftModel) || db?.[0] || {
+        const matchedAircraft = await aircraftService.getAircraftByModel(config.aircraftModel);
+        if (config.initialSave && !matchedAircraft) throw new Error('Saved aircraft is not supported.');
+        const aircraft = matchedAircraft || db?.[0] || {
           name: 'Boeing 737-800',
           mass: 41410,
           maxThrustPerEngine: 120000,
@@ -119,7 +122,10 @@ export function useAircraftPhysics(launchConfig = {}, autoStart = true) {
             orientation: { psi: initialHeading * Math.PI / 180, theta: 0, phi: 0 },
             flightPlan: config.flightPlan,
             difficulty: config.difficulty,
-            failureType: config.failureType
+            failureSelection: config.failureSelection,
+            failureFlightSeconds: estimateFailureFlightSeconds(config.departure, config.arrival),
+            failureType: config.failureType,
+            failureContext: config.failureContext
           });
 
           if (geometry) service.setRunwayGeometry(geometry);
@@ -143,6 +149,8 @@ export function useAircraftPhysics(launchConfig = {}, autoStart = true) {
         // React's motion-control effect would otherwise zero an airborne spawn's
         // velocity because new physics services start with motion disabled.
         service.setMotionEnabled(true);
+        service.sessionContext = config.sessionContext || null;
+        if (config.initialSave) service.loadFlightState(config.initialSave);
         physicsServiceRef.current = service;
         coordinatorRef.current = new PhysicsCoordinator(service);
         if (previousService && previousService !== service && typeof previousService.stop === 'function') {

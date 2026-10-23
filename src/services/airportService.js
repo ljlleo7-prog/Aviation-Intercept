@@ -1,4 +1,7 @@
+import { loadInstalledAipPack } from './aipPackStorage.js';
 import airportDatabase from '../data/airportDatabase.json';
+import { getVisualRunwayGeometry, getSourcedRunwayNames } from '../data/visualRunwayCoordinates.js';
+import sceneryRunways from '../data/sceneryRunways.js';
 import { getAirportReferenceByCode, getNearbyAirportReferences, searchAirportReferences } from './routes/adapters/airportReferenceAdapter.js';
 import { getNearbyOurAirports, getOurAirportByCode, searchOurAirports } from './routes/adapters/ourAirportsAdapter.js';
 import { fetchOpenAipReferences } from './routes/adapters/openAipAdapter.js';
@@ -13,10 +16,42 @@ import {
 
 class AirportService {
   constructor(apiKey = '') {
-    this.allAirports = airportDatabase.airports;
+    this.allAirports = airportDatabase.airports.map(airport => ({ ...airport }));
+    this.applySceneryReferences(sceneryRunways);
     this.apiKey = apiKey;
     this.useLocalDatabase = !apiKey;
     this.freeTrialUsed = false;
+  }
+
+  async loadInstalledAirports() {
+    if (!this.installedAirportsPromise) this.installedAirportsPromise = loadInstalledAipPack().then(pack => {
+      if (!pack) return false;
+      const known = new Map(this.allAirports.map(airport => [airport.icao, airport]));
+      for (const airport of pack.airports) {
+        const local = known.get(airport.icao);
+        // Keep scenery geometry; fill missing fields from the AIP bundle.
+        known.set(airport.icao, local ? { ...airport, ...local } : airport);
+      }
+      this.allAirports = [...known.values()];
+      return true;
+    });
+    return this.installedAirportsPromise;
+  }
+
+  applySceneryReferences(references) {
+    // New identity invalidates spatial and code indexes after scenery updates.
+    this.allAirports = [...this.allAirports];
+    for (const source of Object.values(references)) {
+      if (!source.airport) continue;
+      const index = this.allAirports.findIndex(airport => (source.airport.icao && airport.icao === source.airport.icao) || (source.airport.iata && airport.iata === source.airport.iata));
+      const runways = source.runways.map(([first, second, startLatitude, startLongitude, endLatitude, endLongitude, length, width]) => ({
+        name: `${first}/${second}`, length, width, startLatitude, startLongitude, endLatitude, endLongitude
+      }));
+      const airport = { ...(index >= 0 ? this.allAirports[index] : {}), ...source.airport, runways,
+        type: index >= 0 ? this.allAirports[index].type : source.airport.type };
+      if (index >= 0) this.allAirports[index] = airport;
+      else this.allAirports.push(airport);
+    }
   }
 
   getAllAirports() {
@@ -32,7 +67,7 @@ class AirportService {
   }
 
   searchAirports(query, options = {}) {
-    const { type = 'all', includeEmergency = false } = options;
+    const { type = 'all', includeEmergency = true } = options;
 
     if (!query || query.trim().length < 2) {
       return [];
@@ -46,13 +81,14 @@ class AirportService {
       airportsToSearch = this.getEmergencyAirports();
     }
 
-    const searchTerm = query.toLowerCase();
+    const searchTerm = query.trim().toLowerCase();
     return airportsToSearch.filter(airport =>
-      airport.iata.toLowerCase().includes(searchTerm) ||
-      airport.icao.toLowerCase().includes(searchTerm) ||
-      airport.name.toLowerCase().includes(searchTerm) ||
-      (airport.city && airport.city.toLowerCase().includes(searchTerm))
-    );
+      [airport.iata, airport.icao, airport.name, airport.city].some(value =>
+        String(value || '').toLowerCase().includes(searchTerm))
+    ).sort((a, b) => {
+      const exact = airport => [airport.iata, airport.icao].some(code => String(code || '').toLowerCase() === searchTerm);
+      return Number(exact(b)) - Number(exact(a));
+    });
   }
 
   searchNormalAirports(query) {
@@ -70,21 +106,30 @@ class AirportService {
   }
 
   async searchAirportsRemote(query, options = {}) {
+    if (await this.loadInstalledAirports()) return this.searchAirports(query, options);
     const localResults = this.searchAirports(query, options);
-    const [supabaseResponse, ourAirportsResponse, referenceResponse] = await Promise.all([
-      searchSupabaseAirports(query, options),
-      searchOurAirports({ query }),
-      searchAirportReferences({ query })
+    if (!query || query.trim().length < 2) return [];
+    const responses = await Promise.allSettled([
+      searchSupabaseAirports(query.trim(), options),
+      searchOurAirports({ query: query.trim() }),
+      searchAirportReferences({ query: query.trim() })
     ]);
-    return this.mergeAirportResults(
-      supabaseResponse?.status === 'ok' && Array.isArray(supabaseResponse.airports) ? supabaseResponse.airports : [],
+    const [supabaseResponse, ourAirportsResponse, referenceResponse] = responses.map(result => result.status === 'fulfilled' ? result.value : null);
+    const results = this.mergeAirportResults(
       localResults,
+      supabaseResponse?.status === 'ok' && Array.isArray(supabaseResponse.airports) ? supabaseResponse.airports : [],
       ourAirportsResponse?.status === 'ok' && Array.isArray(ourAirportsResponse.airports) ? ourAirportsResponse.airports : [],
       referenceResponse?.status === 'ok' && Array.isArray(referenceResponse.airports) ? referenceResponse.airports : []
     );
+    for (const airport of results) {
+      if (!this.getAirportByCode(airport.icao || airport.iata)) this.allAirports.push(airport);
+    }
+    const codes = new Set(results.map(airport => airport.icao || airport.iata));
+    return this.searchAirports(query, options).filter(airport => codes.has(airport.icao || airport.iata));
   }
 
   async getAirportByCodeRemote(code) {
+    if (await this.loadInstalledAirports()) return this.getAirportByCode(code) || null;
     const localAirport = this.getAirportByCode(code);
     const [supabaseResponse, ourAirportResponse, referenceResponse] = await Promise.all([
       getSupabaseAirportDetails(code),
@@ -100,6 +145,7 @@ class AirportService {
   }
 
   async getAirportsWithinRadiusRemote(latitude, longitude, radiusNm, options = {}) {
+    if (await this.loadInstalledAirports()) return this.getAirportsWithinRadius(latitude, longitude, radiusNm, options);
     const localResults = this.getAirportsWithinRadius(latitude, longitude, radiusNm, options);
     const [supabaseResponse, ourAirportsResponse, referenceResponse] = await Promise.all([
       getSupabaseAirportsWithinRadius(latitude, longitude, radiusNm, options),
@@ -144,10 +190,20 @@ class AirportService {
   }
 
   getAirportByCode(code) {
-    return this.allAirports.find(airport =>
-      airport.iata.toUpperCase() === code.toUpperCase() ||
-      airport.icao.toUpperCase() === code.toUpperCase()
-    );
+    const normalized = String(code || '').trim().toUpperCase();
+    if (!normalized) return undefined;
+    if (this.codeIndexSource !== this.allAirports || this.codeIndexSize !== this.allAirports.length) {
+      this.codeIndex = new Map();
+      for (const airport of this.allAirports) {
+        for (const value of [airport.icao, airport.iata]) {
+          const key = String(value || '').toUpperCase();
+          if (key && !this.codeIndex.has(key)) this.codeIndex.set(key, airport);
+        }
+      }
+      this.codeIndexSource = this.allAirports;
+      this.codeIndexSize = this.allAirports.length;
+    }
+    return this.codeIndex.get(normalized);
   }
 
   getAirportType(code) {
@@ -209,12 +265,22 @@ class AirportService {
     return airportsToSearch.filter(airport => airport.category === category);
   }
 
-  getAirportByFrequency(frequency) {
+  getAirportByFrequency(frequency, position) {
+    if (!Number.isFinite(frequency)) return undefined;
     const TOLERANCE = 0.005;
-    return this.allAirports.find(airport => {
-      if (!airport.frequencies) return false;
-      return airport.frequencies.some(f => Math.abs(f.frequency - frequency) < TOLERANCE);
-    });
+    const matches = this.allAirports.filter(airport =>
+      airport.frequencies?.some(f => Math.abs(f.frequency - frequency) < TOLERANCE));
+    if (!Number.isFinite(position?.latitude) || !Number.isFinite(position?.longitude)) {
+      // Frequencies are reused worldwide; an ambiguous match needs a location.
+      return matches.length === 1 ? matches[0] : undefined;
+    }
+    let closest; let closestDistance = 200; // NM; ignore stations across the world.
+    for (const airport of matches) {
+      if (!Number.isFinite(airport.latitude) || !Number.isFinite(airport.longitude)) continue;
+      const distance = this.calculateDistance(position, airport);
+      if (distance < closestDistance) { closest = airport; closestDistance = distance; }
+    }
+    return closest;
   }
 
   getRunwayInfo(airportCode) {
@@ -288,6 +354,7 @@ class AirportService {
   }
 
   getIlsFrequency(airportCode, finalRunwayName, rawRunwayName) {
+    const canonicalCode = this.getAirportByCode(airportCode)?.icao || String(airportCode || '').trim().toUpperCase();
     const ILS_FREQUENCIES = {
       "KLAX": { "24R": 108.50, "24L": 108.40, "25R": 108.75, "25L": 109.90, "06L": 108.40, "06R": 108.50, "07L": 109.90, "07R": 108.75 },
       "KSFO": { "28L": 109.55, "28R": 111.70, "19L": 108.90, "19R": 108.70, "01L": 110.50, "01R": 109.30 },
@@ -295,10 +362,10 @@ class AirportService {
       "ZSSS": { "18L": 109.30, "36R": 110.30, "18R": 109.90, "36L": 111.90 },
       "SHA": { "18L": 109.30, "36R": 110.30, "18R": 109.90, "36L": 111.90 }
     };
-    if (ILS_FREQUENCIES[airportCode]?.[finalRunwayName]) {
-      return ILS_FREQUENCIES[airportCode][finalRunwayName];
+    if (ILS_FREQUENCIES[canonicalCode]?.[finalRunwayName]) {
+      return ILS_FREQUENCIES[canonicalCode][finalRunwayName];
     }
-    const seedSource = `${String(airportCode || '').trim().toUpperCase()}:${String(finalRunwayName || rawRunwayName || '').trim().toUpperCase()}`;
+    const seedSource = `${canonicalCode}:${String(finalRunwayName || rawRunwayName || '').trim().toUpperCase()}`;
     let seed = 0;
     for (let i = 0; i < seedSource.length; i++) {
       seed = (seed * 31 + seedSource.charCodeAt(i)) % 200000;
@@ -311,9 +378,16 @@ class AirportService {
     const airport = this.getAirportByCode(airportCode);
     if (!airport) return null;
 
+    const sourcedEnd = String(runwayName || getSourcedRunwayNames(airportCode)[0] || '').trim().toUpperCase().split(/[/-]/)[0];
+    const sourced = getVisualRunwayGeometry(airportCode, sourcedEnd, null);
+    if (sourced) {
+      return { ...sourced, airportLat: airport.latitude, airportLon: airport.longitude,
+        ilsFrequency: this.getIlsFrequency(airportCode, sourced.runwayName, runwayName) };
+    }
+
     const requestedRunway = String(runwayName || '').trim().toUpperCase();
     const splitRunwayEnds = (name) => String(name || '')
-      .split(/[\/-]/)
+      .split(/[/-]/)
       .map((part) => part.trim().toUpperCase())
       .filter(Boolean);
 
@@ -333,7 +407,10 @@ class AirportService {
       }
     }
 
-    // Fallback to first runway or a mock if not found
+    // Never silently select a different runway for an explicit request.
+    if (requestedRunway && !runway) return null;
+
+    // Free-flight scenery may still use an approximate default runway.
     if (!runway) {
       if (airport.runways && Array.isArray(airport.runways) && airport.runways.length > 0) {
         runway = airport.runways[0];
@@ -359,11 +436,18 @@ class AirportService {
     // Runway designators are rounded labels; parallel strips can use different numbers.
     const storedBearing = runway.bearing == null || String(runway.bearing).trim() === ''
       ? NaN : Number(runway.bearing);
-    const primaryHeadingDeg = Number.isFinite(storedBearing)
+    let primaryHeadingDeg = Number.isFinite(storedBearing)
       ? ((storedBearing % 360) + 360) % 360
       : parseRunwayHeading(primaryRunwayEnd);
+    const hasStoredGeometry = [runway.startLatitude, runway.startLongitude, runway.endLatitude, runway.endLongitude]
+      .every(value => value != null && String(value).trim() !== '' && Number.isFinite(Number(value)));
+    if (hasStoredGeometry && !Number.isFinite(storedBearing)) {
+      const north = Number(runway.endLatitude) - Number(runway.startLatitude);
+      const east = (Number(runway.endLongitude) - Number(runway.startLongitude))
+        * Math.cos((Number(runway.startLatitude) + Number(runway.endLatitude)) / 2 * Math.PI / 180);
+      primaryHeadingDeg = (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+    }
     const reciprocalHeadingDeg = (primaryHeadingDeg + 180) % 360;
-    const hasStoredGeometry = runway.startLatitude != null && runway.startLongitude != null && runway.endLatitude != null && runway.endLongitude != null;
 
     if (hasStoredGeometry) {
       const startThreshold = {
@@ -386,6 +470,7 @@ class AirportService {
         airportLat: airport.latitude,
         airportLon: airport.longitude,
         heading: finalHeading,
+        headingSource: Number.isFinite(storedBearing) ? 'published-bearing' : 'threshold-coordinates',
         length: (Number(runway.length) || 8000) * 0.3048,
         width: (Number(runway.width) || 45 * 3.28084) * 0.3048,
         thresholdStart: selectedIsReciprocal ? endThreshold : startThreshold,
@@ -449,6 +534,7 @@ class AirportService {
       airportLat: airport.latitude,
       airportLon: airport.longitude,
       heading: finalHeading,
+      headingSource: Number.isFinite(storedBearing) ? 'published-bearing' : 'designator-estimate',
       length: lengthM,
       width: widthM,
       thresholdStart: start,

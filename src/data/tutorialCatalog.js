@@ -69,6 +69,8 @@ export const TUTORIALS = [
   },
   {
     id: 'radio-communications',
+    available: false,
+    unavailableReason: 'The current cockpit does not provide the ATC action panel required for this lesson.',
     category: 'radio',
     title: 'Radio Communications',
     summary: 'Use the radio stack and ATC action panel to practice basic tower calls.',

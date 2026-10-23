@@ -71,7 +71,8 @@ class FlightRecorder {
 
 const getDefaultOutPaths = (scenarioPath) => {
     const base = path.basename(scenarioPath, path.extname(scenarioPath));
-    const dir = process.cwd();
+    const dir = path.resolve(process.cwd(), 'test-results');
+    fs.mkdirSync(dir, { recursive: true });
     return {
         csv: path.resolve(dir, `${base}.csv`),
         report: path.resolve(dir, `${base}.report.json`)

@@ -1,12 +1,24 @@
 import { Quaternion, Vector3 } from '../../utils/flightMath.js';
+import { airportSurfaceAt } from '../../utils/airportGroundSurface.js';
 
 export default class GroundInteractionService {
+    getNormalForce(gear, depth, verticalSpeed, mass) {
+        if (depth <= 0) return 0;
+        // Fade the damper in as the tire/strut loads. A full damper force at
+        // zero compression creates an impulse when one main touches first.
+        const contactFraction = Math.min(1, depth / 0.03);
+        const dampingBlend = contactFraction * contactFraction * (3 - 2 * contactFraction);
+        const load = gear.k * depth + gear.c * verticalSpeed * dampingBlend;
+        return load > 0 ? -Math.min(load, mass * 9.81 * 4) : 0;
+    }
+
     getContactPoints(gearHeight, gearDown = true, stiffness = 3000000) {
         const height = gearDown ? gearHeight : Math.min(0.75, gearHeight);
+        const dampingScale = stiffness / 3000000;
         return [
-            { name: 'nose', pos: new Vector3(14, 0, height), k: stiffness * 0.2, c: 35000 },
-            { name: 'mainL', pos: new Vector3(-2, -3.5, height), k: stiffness * 0.4, c: 150000 },
-            { name: 'mainR', pos: new Vector3(-2, 3.5, height), k: stiffness * 0.4, c: 150000 }
+            { name: 'nose', pos: new Vector3(14, 0, height), k: stiffness * 0.2, c: 35000 * dampingScale },
+            { name: 'mainL', pos: new Vector3(-2, -3.5, height), k: stiffness * 0.4, c: 150000 * dampingScale },
+            { name: 'mainR', pos: new Vector3(-2, 3.5, height), k: stiffness * 0.4, c: 150000 * dampingScale }
         ];
     }
 
@@ -64,6 +76,8 @@ export default class GroundInteractionService {
         } else if (distAlong >= -alongBuffer && distAlong <= length + alongBuffer && distCross <= grassWidthTolerance) {
             status = 'GRASS';
         }
+        const mappedSurface = airportSurfaceAt(state.geo, this.airportLayout);
+        if (mappedSurface && status !== 'RUNWAY') status = mappedSurface;
 
         let remaining = 0;
         if (distAlong < 0) remaining = length;
@@ -72,7 +86,7 @@ export default class GroundInteractionService {
 
         const runwayElevation = thresholdStart.elevation == null ? NaN : Number(thresholdStart.elevation);
         let groundHeightAMSL = Number.isFinite(runwayElevation) ? runwayElevation * 0.3048 : airportElevation;
-        if (status !== 'RUNWAY' && status !== 'GRASS' && Number.isFinite(terrainElevation)) {
+        if (!['RUNWAY', 'GRASS', 'TAXIWAY', 'APRON', 'PAVED'].includes(status) && Number.isFinite(terrainElevation)) {
             groundHeightAMSL = terrainElevation;
         }
 
@@ -80,62 +94,6 @@ export default class GroundInteractionService {
             groundStatus: { status, remainingLength: remaining },
             currentGroundZ: -(groundHeightAMSL - airportElevation)
         };
-    }
-
-    applyRunwayStabilizer(state, runwayGeometry, onGround, groundStatus, difficulty, rudder = 0) {
-        if (difficulty === 'devil') return null;
-        if (!onGround || groundStatus.status !== 'RUNWAY') return null;
-        if (!runwayGeometry?.thresholdStart) return null;
-
-        // Taxi steering must remain free; runway assistance cannot erase pedal turns.
-        if (state.vel.magnitude() < 15 || Math.abs(rudder) > 0.01) return null;
-
-        const geom = runwayGeometry;
-        const lat0 = geom.thresholdStart.latitude;
-        const lon0 = geom.thresholdStart.longitude;
-        const latRad = lat0 * Math.PI / 180;
-        const metersPerLat = 111132.92;
-        const metersPerLon = 111412.84 * Math.cos(latRad);
-
-        const dx = (state.geo.lat - lat0) * metersPerLat;
-        const dy = (state.geo.lon - lon0) * metersPerLon;
-
-        const headingRad = geom.heading * Math.PI / 180;
-        const ux = Math.cos(headingRad);
-        const uy = Math.sin(headingRad);
-        const distAlong = dx * ux + dy * uy;
-        const XTE = dy * ux - dx * uy;
-
-        const euler = state.quat.toEuler();
-        let headingDiff = euler.psi - headingRad;
-        while (headingDiff > Math.PI) headingDiff -= 2 * Math.PI;
-        while (headingDiff < -Math.PI) headingDiff += 2 * Math.PI;
-
-        if (difficulty === 'rookie') {
-            const newDx = distAlong * ux;
-            const newDy = distAlong * uy;
-            state.geo.lat = lat0 + newDx / metersPerLat;
-            state.geo.lon = lon0 + newDy / metersPerLon;
-            state.quat = Quaternion.fromEuler(euler.phi, euler.theta, headingRad);
-            state.vel.y = 0;
-            state.rates.z = 0;
-            return null;
-        } else {
-            const sideVel = state.vel.y;
-            const k_lat = 5000;
-            const c_lat = 10000;
-            let F_y = -XTE * k_lat - sideVel * c_lat;
-            const maxF = state.mass * 2.0;
-            F_y = Math.max(-maxF, Math.min(maxF, F_y));
-
-            const k_yaw = 500000;
-            const c_yaw = 500000;
-            let M_z = -headingDiff * k_yaw - state.rates.z * c_yaw;
-            const maxM = 5000000;
-            M_z = Math.max(-maxM, Math.min(maxM, M_z));
-
-            return { Fy: F_y, Mz: M_z };
-        }
     }
 
     getRunwayBrakingData(runwayGeometry = {}, environment = {}) {

@@ -1,3 +1,4 @@
+import { hasManualReversion } from '../physics/controlTransmission.js';
 import ComponentStateStore from './ComponentStateStore.js';
 import ResourceNetworkSolver from './ResourceNetworkSolver.js';
 import B737SystemTopology from './B737SystemTopology.js';
@@ -98,9 +99,9 @@ export default class AircraftSystemModel {
             components,
             damageLedger: this.componentStore.getDamageLedger(),
             capabilities: {
-                aileron: resources.has('roll_control') ? (hydraulicCount === 2 ? 1 : 0.65) * health('controls.aileron') : 0.08,
-                elevator: resources.has('pitch_control') ? (hydraulicCount === 2 ? 1 : 0.6) * health('controls.elevator') : 0.08,
-                rudder: resources.has('yaw_control') ? (hydraulicCount === 2 ? 1 : 0.55) * health('controls.rudder') : 0.08,
+                aileron: hasManualReversion(this.aircraft, 'aileron') ? health('controls.aileron') : resources.has('roll_control') ? (hydraulicCount === 2 ? 1 : 0.65) * health('controls.aileron') : 0,
+                elevator: hasManualReversion(this.aircraft, 'elevator') ? health('controls.elevator') : resources.has('pitch_control') ? (hydraulicCount === 2 ? 1 : 0.6) * health('controls.elevator') : 0,
+                rudder: resources.has('yaw_control') ? (hydraulicCount === 2 ? 1 : 0.55) * health('controls.rudder') : 0,
                 spoilers: resources.has('spoiler_control') ? (hydraulicCount === 2 ? 1 : 0.5) * health('controls.spoilers') : 0,
                 gear: resources.has('gear_actuation') ? health('controls.landing_gear') : 0,
                 brakes: resources.has('wheel_braking') ? (hydraulicCount === 2 ? 1 : 0.5) * health('controls.normal_brakes') : 0.1,

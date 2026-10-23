@@ -1,5 +1,7 @@
+import useAirportResults from './hooks/useAirportResults.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './App.css';
+import './components/MenuWorld.css';
 import useAirportSearch from './hooks/useAirportSearch';
 import aircraftService from './services/aircraftService';
 import { calculateFlightPlan, formatDistance, formatFlightTime, formatFuel } from './utils/distanceCalculator';
@@ -11,15 +13,17 @@ import { generateInitialWeather } from './services/weatherService';
 import { buildAutoRouteDetails, buildRouteAuthState, DEFAULT_ROUTE_DETAILS, mergeFlightPlanWithRoute, normalizeRouteDetails, normalizeWaypoint } from './utils/routeDetails.js';
 
 import { FadeOverlay, CinematicReview } from './components/CinematicComponents.jsx';
-import { LanguageProvider } from './contexts/LanguageContext';
+import { LanguageProvider, TranslatedText } from './contexts/LanguageContext';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import Header from './components/Header';
+import DisplaySettings from './components/DisplaySettings';
+import FlightRecoveryPanel from './components/FlightRecoveryPanel';
+import { getRecoveryConfig } from './services/flightRecovery.js';
 import HomePage from './components/HomePage';
 import LoginPage from './components/LoginPage.jsx';
 import TutorialHub from './components/TutorialHub';
 import ChallengesHub from './components/ChallengesHub';
 import FMCPanel from './components/fmc/FMCPanel';
-import { airportService } from './services/airportService';
 import { TUTORIALS } from './data/tutorialCatalog';
 import { CHALLENGES } from './data/challengeCatalog';
 import { cloudSaveService } from './services/cloudSaveService.js';
@@ -57,6 +61,7 @@ function App() {
   const [isTutorial, setIsTutorial] = useState(false);
   const [difficulty, setDifficulty] = useState('rookie');
   const [preflightConfig, setPreflightConfig] = useState({
+    failureSelection: { mode: 'normal', count: 2, banks: ['engine', 'systems', 'controls', 'environment', 'sensors'] },
     airline: 'Test Airline',
     callsign: 'TEST001',
     aircraftModel: 'B737-800',
@@ -80,6 +85,8 @@ function App() {
   const [activeTutorial, setActiveTutorial] = useState(null);
   const [activeChallenge, setActiveChallenge] = useState(null);
   const [resumeSave, setResumeSave] = useState(null);
+  const [recovery, setRecovery] = useState(null);
+  const [flightSessionId, setFlightSessionId] = useState(0);
   const [resumeCheckLoading, setResumeCheckLoading] = useState(false);
   const [resumeCheckError, setResumeCheckError] = useState(null);
   const { selectedDeparture, selectedArrival, selectDeparture, selectArrival, getAirportByCode, getAirportByCodeRemote } = useAirportSearch();
@@ -122,36 +129,20 @@ function App() {
       return;
     }
 
-    window.localStorage.setItem(APP_SETTINGS_STORAGE_KEY, JSON.stringify(appSettings));
+    try {
+      window.localStorage.setItem(APP_SETTINGS_STORAGE_KEY, JSON.stringify(appSettings));
+    } catch {
+      // Keep settings usable when browser storage is unavailable.
+    }
   }, [appSettings]);
 
   useEffect(() => {
     preloadLocalAipData();
   }, []);
 
-  const departureResults = useMemo(() => airportService.searchAirports(departureQuery).slice(0, 10), [departureQuery]);
-  const arrivalResults = useMemo(() => airportService.searchAirports(arrivalQuery).slice(0, 10), [arrivalQuery]);
-  const alternateResults = useMemo(() => airportService.searchAirports(alternateQuery).slice(0, 10), [alternateQuery]);
-
-  const hydrateExactAirportCode = async (query, localResults, selectAirport) => {
-    const code = String(query || '').trim().toUpperCase();
-    if (!/^[A-Z0-9]{3,4}$/.test(code)) return;
-    if (localResults.length > 0) return;
-    const airport = await getAirportByCodeRemote(code);
-    if (airport) selectAirport(airport);
-  };
-
-  useEffect(() => {
-    hydrateExactAirportCode(departureQuery, departureResults, setPreflightDeparture);
-  }, [departureQuery, departureResults]);
-
-  useEffect(() => {
-    hydrateExactAirportCode(arrivalQuery, arrivalResults, setPreflightArrival);
-  }, [arrivalQuery, arrivalResults]);
-
-  useEffect(() => {
-    hydrateExactAirportCode(alternateQuery, alternateResults, setPreflightAlternate);
-  }, [alternateQuery, alternateResults]);
+  const departureResults = useAirportResults(departureQuery);
+  const arrivalResults = useAirportResults(arrivalQuery);
+  const alternateResults = useAirportResults(alternateQuery);
 
   const updatePreflightConfig = (patch) => {
     setPreflightConfig((prev) => ({ ...prev, ...patch }));
@@ -368,7 +359,7 @@ function App() {
     let isMounted = true;
 
     const loadResumeSave = async () => {
-      if (authLoading || !activeUser || appMode !== 'init') {
+      if (authLoading || !activeUser || appMode !== 'recovery') {
         if (isMounted) {
           setResumeSave(null);
           setResumeCheckError(null);
@@ -378,7 +369,13 @@ function App() {
       }
 
       setResumeCheckLoading(true);
-      const { data, error } = await cloudSaveService.getCurrentUserSave();
+      let result;
+      try {
+        result = await cloudSaveService.getCurrentUserSave();
+      } catch {
+        result = { data: null, error: { message: 'Unable to load cloud save.' } };
+      }
+      const { data, error } = result;
 
       if (!isMounted) {
         return;
@@ -437,27 +434,27 @@ function App() {
     startSimulation(DEFAULT_ROUTE_DETAILS);
   };
 
-  const handleResumeFlight = (saveRecord) => {
-    const payload = saveRecord?.data;
-    if (!payload) {
-      alert('Saved flight data is unavailable.');
-      return;
+  const handleResumeFlight = async (saveRecord) => {
+    try {
+      const { save, config } = getRecoveryConfig(saveRecord?.data);
+      if (!await aircraftService.getAircraftByModel(save.aircraftModel)) throw new Error('Saved aircraft is not supported.');
+      setRecovery(save);
+      setPreflightConfig(prev => ({ ...prev, ...config }));
+      setWeatherData(config.weatherData);
+      setDifficulty(config.difficulty || 'rookie');
+      setFailureType(config.failureType || 'random');
+      setActiveTutorial(null);
+      setActiveChallenge(null);
+      setIsTutorial(false);
+      setShowSettings(false);
+      setCinematicPhase('none');
+      setResumeCheckError(null);
+      setFlightSessionId(previous => previous + 1);
+      setFlightInitialized(true);
+      setAppMode('simulation');
+    } catch (error) {
+      setResumeCheckError(error.message);
     }
-
-    const restoredFlightData = payload.flightData || {};
-    const restoredFlightPlan = payload.flightPlan || null;
-    const restoredWeather = payload.weatherData || weatherData;
-
-    setPreflightConfig((prev) => ({
-      ...prev,
-      flightPlan: restoredFlightPlan,
-      weatherData: restoredWeather,
-      aircraftModel: payload.aircraftModel || prev.aircraftModel
-    }));
-    setWeatherData(restoredWeather);
-    setResumeSave(saveRecord);
-    setFlightInitialized(true);
-    setAppMode('simulation');
   };
 
   const handleDiscardResumeSave = async () => {
@@ -471,14 +468,20 @@ function App() {
       return;
     }
 
-    const { error } = await cloudSaveService.discardFlight(resumeSave.id);
-    if (error) {
-      alert(`Failed to discard saved flight: ${error.message || 'Unknown error'}`);
-      return;
+    setResumeCheckLoading(true);
+    try {
+      const { error } = await cloudSaveService.discardFlight(resumeSave.id);
+      if (error) {
+        setResumeCheckError(error.message || 'Unable to discard cloud save.');
+      } else {
+        setResumeSave(null);
+        setResumeCheckError(null);
+      }
+    } catch {
+      setResumeCheckError('Unable to discard cloud save.');
+    } finally {
+      setResumeCheckLoading(false);
     }
-
-    setResumeSave(null);
-    setResumeCheckError(null);
   };
 
   const startSimulation = () => {
@@ -530,12 +533,14 @@ function App() {
   };
 
   const handleResetFlight = () => {
+    setRecovery(null);
     setFlightInitialized(false);
     setAppMode('init');
     updatePreflightConfig({ flightPlan: null, routeDetails: DEFAULT_ROUTE_DETAILS });
   };
 
   const handleStartSinglePlayer = () => {
+    setRecovery(null);
     setAppMode('init');
     setIsTutorial(false);
     setActiveTutorial(null);
@@ -557,6 +562,8 @@ function App() {
   };
 
   const launchScenario = async (scenario, mode = 'tutorial') => {
+    if (scenario.available === false) return;
+
     const dep = getAirportByCode(scenario.departureCode);
     const arr = getAirportByCode(scenario.arrivalCode);
 
@@ -669,8 +676,8 @@ function App() {
           {cinematicPhase === 'fade_out' && (
             <FadeOverlay phase="fade-out">
               <div className="fade-content">
-                <h1>Initializing Flight Simulation</h1>
-                <p>Preparing for takeoff...</p>
+                <h1><TranslatedText>Initializing Flight Simulation</TranslatedText></h1>
+                <p><TranslatedText>Preparing for takeoff...</TranslatedText></p>
               </div>
             </FadeOverlay>
           )}
@@ -709,8 +716,8 @@ function App() {
           {cinematicPhase === 'fade_in' && (
             <FadeOverlay phase="fade-in">
               <div className="fade-content">
-                <h1>Simulation Active</h1>
-                <p>Flight controls are now available</p>
+                <h1><TranslatedText>Simulation Active</TranslatedText></h1>
+                <p><TranslatedText>Flight controls are now available</TranslatedText></p>
               </div>
             </FadeOverlay>
           )}
@@ -724,6 +731,9 @@ function App() {
       <LanguageProvider>
         <LanguageSwitcher style={{ position: 'fixed', top: '10px', right: '120px', zIndex: 2000 }} />
         <FlightInProgress
+          key={flightSessionId}
+          initialSave={recovery}
+          onRestoreFlight={payload => handleResumeFlight({ data: payload })}
           callsign={callsign}
           aircraftModel={aircraftModel}
           difficulty={difficulty}
@@ -746,6 +756,7 @@ function App() {
           formatFuel={formatFuel}
           weatherData={weatherData}
           setWeatherData={setWeatherData}
+          failureSelection={preflightConfig.failureSelection}
           failureType={failureType}
           crewCount={crewCount}
           routeDetails={runtimeRouteDetails}
@@ -762,11 +773,12 @@ function App() {
   if (appMode === 'init') {
     return (
       <LanguageProvider>
-        <div className="App">
+        <div className="App app-entry menu-world">
           <LanguageSwitcher style={{ position: 'absolute', top: '20px', right: '20px' }} />
           <Header devMode={devMode} setDevMode={setDevMode} handleDevStart={handleDevStart} />
 
           <main className="app-main">
+            <button className="entry-back" onClick={() => setAppMode('home')}><TranslatedText>← Main menu</TranslatedText></button>
             <RouteSelectionFrame
                 isOpen
                 onConfirm={handleRouteConfirm}
@@ -793,6 +805,18 @@ function App() {
         </div>
       </LanguageProvider>
     );
+  }
+
+  if (appMode === 'recovery') {
+    return <LanguageProvider>
+      <div className="app-entry menu-world">
+        <main className="app-main" style={{ padding: '32px', minHeight: '100svh' }}>
+          <button className="entry-back" onClick={() => setAppMode('home')}><TranslatedText>← Main menu</TranslatedText></button>
+          <FlightRecoveryPanel save={resumeSave} loading={resumeCheckLoading} error={resumeCheckError}
+            offline={offlineMode} onResume={handleResumeFlight} onDiscard={handleDiscardResumeSave} />
+        </main>
+      </div>
+    </LanguageProvider>;
   }
 
   if (appMode === 'tutorial-hub') {
@@ -828,35 +852,34 @@ function App() {
         onStartTutorial={handleStartTutorial}
         onStartChallenges={handleStartChallenges}
         onOpenSettings={handleOpenSettings}
+        onRecoverFlight={() => setAppMode('recovery')}
       />
       {showSettings && (
-        <div style={{
+        <div className="menu-settings-overlay" style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0, 0, 0, 0.65)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 3000
         }}>
-          <div style={{
+          <div className="menu-settings-panel" style={{
             width: 'min(420px, calc(100vw - 32px))',
-            background: '#111827',
-            border: '1px solid #374151',
             borderRadius: '12px',
             padding: '20px',
             color: '#f9fafb',
             boxShadow: '0 20px 50px rgba(0,0,0,0.4)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px' }}>Settings</h2>
-              <button onClick={handleCloseSettings} style={{ background: 'transparent', color: '#f9fafb', border: 'none', fontSize: '18px', cursor: 'pointer' }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: '20px' }}><TranslatedText>Settings</TranslatedText></h2>
+              <button aria-label="Close settings" onClick={handleCloseSettings} style={{ background: 'transparent', color: '#f9fafb', border: 'none', fontSize: '18px', cursor: 'pointer' }}>✕</button>
             </div>
+            <DisplaySettings />
             <label style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
               <div>
-                <div style={{ fontWeight: 600 }}>Offline mode</div>
+                <div style={{ fontWeight: 600 }}><TranslatedText>Offline mode</TranslatedText></div>
                 <div style={{ color: '#9ca3af', fontSize: '14px', marginTop: '4px' }}>
-                  Disable multiplayer, cloud save, live weather, and network terrain fetches.
+                  <TranslatedText>Disable multiplayer, cloud save, live weather, and network terrain fetches.</TranslatedText>
                 </div>
               </div>
               <input type="checkbox" checked={offlineMode} onChange={handleOfflineModeChange} />

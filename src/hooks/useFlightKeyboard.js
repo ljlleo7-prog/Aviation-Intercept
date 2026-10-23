@@ -5,12 +5,15 @@ import { attachFlightKeyboard } from '../utils/flightKeyboard.js';
 
 export default function useFlightKeyboard({ aircraftModel, physicsService, enabled, controls }) {
   const [maxFlaps, setMaxFlaps] = useState(0);
+  const [maxAirBrakes, setMaxAirBrakes] = useState(0);
   const latest = useRef(null);
-  latest.current = { physicsService, enabled, controls, maxFlaps };
+  latest.current = { physicsService, enabled, controls, maxFlaps, maxAirBrakes };
   useEffect(() => {
     let active = true;
     setMaxFlaps(0);
+    setMaxAirBrakes(0);
     aircraftService.getControlSurfaceProfiles(aircraftModel).then(profile => {
+      if (active) setMaxAirBrakes(profile?.airbrakes?.positions?.length ? profile.airbrakes.positions.length - 1 : (profile?.airbrakes?.hasTwoTier ? 3 : 1));
       if (active) setMaxFlaps(Math.max(0, (profile?.flaps?.positions?.length || 1) - 1));
     }).catch(() => {});
     return () => { active = false; };
@@ -20,12 +23,13 @@ export default function useFlightKeyboard({ aircraftModel, physicsService, enabl
   useEffect(() => attachFlightKeyboard({
     target: window,
     getState: () => {
-      const { physicsService: service, enabled: ready, maxFlaps: max } = latest.current;
+      const { physicsService: service, enabled: ready, maxFlaps: max, maxAirBrakes: maxBrakes } = latest.current;
       return {
         enabled: ready, hasCrashed: service?.crashed,
         autopilot: service?.getAutopilotStatus?.()?.engaged, onGround: service?.onGround,
         gear: service?.controls?.gear > 0.5, flaps: service?.controls?.flaps ?? 0,
-        maxFlaps: max, throttle: service?.controls?.throttle ?? 0,
+        maxAirBrakes: maxBrakes, airBrakes: service?.controls?.airBrakes ?? 0,
+        maxFlaps: max, throttle: service?.throttleCommand ?? service?.controls?.throttle ?? 0,
         parkingBrake: service?.systems?.brakes?.parkingBrake === true
       };
     },

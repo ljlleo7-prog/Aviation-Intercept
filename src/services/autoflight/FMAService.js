@@ -27,7 +27,7 @@ class FMAService {
       verticalArmed = buildModeCell(ils.gsCaptured ? '' : 'G/S', !ils.gsCaptured);
     }
 
-    if (mode !== 'ILS' && mode !== 'CWS') {
+    if (mode !== 'ILS' && (mode !== 'CWS' || vnavArmed)) {
       if (vnavArmed) {
         verticalActive = buildModeCell(vnavPathAvailable ? 'VNAV PTH' : 'VNAV ARM');
       } else if (altitudeMode === 'hold') {

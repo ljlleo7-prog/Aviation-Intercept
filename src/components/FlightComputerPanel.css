@@ -369,3 +369,11 @@ input[type="text"]:focus {
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
+.flight-computer-panel.flight-computer-panel { width: min(760px, calc(100vw - 90px)); height: min(800px, calc(100dvh - 30px)); border-radius: 16px; background: #0c1a29; border: 1px solid #344b60; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+.flight-computer-panel .fc-header { padding: 22px; background: #102236; }
+.flight-computer-panel .fc-header h3 { color: #e4eff9; text-transform: none; font-size: 21px; letter-spacing: 0; }
+.flight-computer-panel .fc-tabs { padding: 8px; gap: 4px; flex-wrap: wrap; }
+.flight-computer-panel .fc-tabs button { padding: 12px; border-radius: 7px; }
+.flight-computer-panel .fc-tabs button.active { color: #8de6ec; background: #1c3e50; border-bottom-color: transparent; }
+.flight-computer-panel .fc-content { padding: 22px; min-height: 0; }
+.flight-computer-panel button:focus-visible { outline: 2px solid #7ae3ec; outline-offset: 2px; }

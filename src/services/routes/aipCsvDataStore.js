@@ -1,3 +1,6 @@
+import { parseCsv as parseCsvText } from '../../utils/csv.js';
+import { loadInstalledAipPack } from '../aipPackStorage.js';
+
 const defaultCsvDir = '/AIP_DATA/supabase_csv';
 
 const FILES = {
@@ -9,42 +12,6 @@ const FILES = {
 
 let cachedStore = null;
 
-const parseCsvLine = (line) => {
-  const values = [];
-  let value = '';
-  let quoted = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const next = line[index + 1];
-
-    if (char === '"' && quoted && next === '"') {
-      value += '"';
-      index += 1;
-    } else if (char === '"') {
-      quoted = !quoted;
-    } else if (char === ',' && !quoted) {
-      values.push(value);
-      value = '';
-    } else {
-      value += char;
-    }
-  }
-
-  values.push(value);
-  return values;
-};
-
-const parseCsvText = (text) => {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter((line) => line.length);
-  const headers = parseCsvLine(lines[0] || '');
-
-  return lines.slice(1).map((line) => {
-    const values = parseCsvLine(line);
-    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']));
-  });
-};
-
 const joinUrlPath = (base, file) => `${String(base || '').replace(/\/$/, '')}/${file}`;
 
 const readCsvText = async (csvDir, fileName, readFile, progressCallback) => {
@@ -55,6 +22,8 @@ const readCsvText = async (csvDir, fileName, readFile, progressCallback) => {
     throw new Error('Local AIP CSV loading requires fetch or a readFile option.');
   }
 
+  const installed = await loadInstalledAipPack();
+  if (installed?.files[fileName]) return installed.files[fileName];
   const response = await fetch(filePath);
   if (!response.ok) throw new Error(`Failed to load ${filePath}: ${response.status}`);
 
@@ -67,7 +36,7 @@ const readCsvText = async (csvDir, fileName, readFile, progressCallback) => {
 
   if (progressCallback) progressCallback(fileName, loaded, total);
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);

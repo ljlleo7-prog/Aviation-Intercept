@@ -54,8 +54,9 @@ class TerrainRadarService {
         const rangeDeg = rangeNm / 60;
         const startLat = lat - rangeDeg;
         const endLat = lat + rangeDeg;
-        const startLon = lon - rangeDeg; 
-        const endLon = lon + rangeDeg;
+        const longitudeScale = Math.max(0.01, Math.cos(lat * Math.PI / 180));
+        const startLon = lon - rangeDeg / longitudeScale;
+        const endLon = lon + rangeDeg / longitudeScale;
 
         const startIdx = this.getGridIndices(startLat, startLon);
         const endIdx = this.getGridIndices(endLat, endLon);
@@ -77,7 +78,7 @@ class TerrainRadarService {
 
                     // Approximate distance check
                     const dLat = tileLat - lat;
-                    const dLon = tileLon - lon;
+                    const dLon = (tileLon - lon) * longitudeScale;
                     const distSq = dLat ** 2 + dLon ** 2;
 
                     // Priority: closest first, front-180° before back-180°.

@@ -84,7 +84,7 @@ export default class SystemsService {
             dump: false
         };
 
-        const fireState = { apu: false, cargo: false, apuHandle: false, bottle1: 100, bottle2: 100 };
+        const fireState = { apu: false, cargo: false, apuHandle: false, bottle1: 100, bottle2: 100, apuBottle: 100 };
         for (let i = 1; i <= engineCount; i++) {
             fireState[`eng${i}`] = false;
             fireState[`eng${i}Handle`] = false;
@@ -111,7 +111,7 @@ export default class SystemsService {
             transponder: { code: 2000, mode: 'STBY', ident: false },
             pressurization: pneuState,
             oxygen: { masks: false, crewPressure: 1800, paxPressure: 1500 },
-            lighting: { landing: false, taxi: false, nav: false, beacon: false, strobe: false, logo: false, wing: false, powered: !isColdDark },
+            lighting: { landing: false, taxi: false, nav: false, beacon: false, strobe: false, logo: false, wing: false, panel: false, background: false, flood: false, dome: false, powered: !isColdDark },
             nav: { irsL: !isColdDark, irsR: !isColdDark },
             engines: enginesState,
             fire: fireState,
@@ -134,6 +134,13 @@ export default class SystemsService {
 
         systemModel?.update(systems, engines);
         OverheadLogic.update(systems, context, dt);
+        engines.forEach((engine, index) => {
+            const count = systems.fire?.extinguishCount?.[`eng${index + 1}`] || 0;
+            if (count > (engine.state.fireExtinguishCount || 0)) {
+                engine.state.fireHeatInput = 0;
+                engine.state.fireExtinguishCount = count;
+            }
+        });
         systemModel?.update(systems, engines);
 
         if (failureParams.quantity_rate) {
@@ -190,14 +197,14 @@ export default class SystemsService {
 
         const hydSystems = Object.values(systems.hydraulics);
         const totalSystems = hydSystems.length;
-        if (totalSystems === 0) return { aileron: 0.1, elevator: 0.1, rudder: 0.1 };
+        if (totalSystems === 0) return { aileron: 0, elevator: 0, rudder: 0 };
 
         let activeSystems = 0;
         hydSystems.forEach(sys => {
             if (sys.pressure > 1500) activeSystems++;
         });
 
-        let healthFactor = 0.1;
+        let healthFactor = 0;
         if (activeSystems > 0) {
             healthFactor = 0.5 + 0.5 * (activeSystems / totalSystems);
         }

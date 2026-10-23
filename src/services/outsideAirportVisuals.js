@@ -1,6 +1,13 @@
 import * as THREE from 'three';
-import { airportBuildingLayout, papiColors, runwayLightLayout } from '../utils/outsideAirportScenery.js';
+import { airportBuildingLayout, papiColors, runwayLightLayout, runwayMarkingPositions } from '../utils/outsideAirportScenery.js';
 import { pointInArea, triangulateGround } from '../utils/airportGroundLayout.js';
+
+export function createRunwayMarkings(parent, length, width, material) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(runwayMarkingPositions(length, width), 3));
+  const mesh = new THREE.Mesh(geometry, material); parent.add(mesh);
+  return mesh;
+}
 
 export function createRunwayLighting(parent, length, width) {
   const { lights, papi } = runwayLightLayout(length, width);
@@ -89,8 +96,11 @@ export function createAirportBuildings(parent, length, width, otherStrips, groun
   const wall = new THREE.MeshStandardMaterial({ map: facade, emissiveMap: nightWindows, emissive: 0xffffff, emissiveIntensity: 0, roughness: .85 });
   const roof = new THREE.MeshStandardMaterial({ color: 0x9b9b91, roughness: 1 });
   const box = new THREE.BoxGeometry(1, 1, 1);
+  const boxIndices = [...box.index.array];
+  box.setIndex([...boxIndices.slice(0, 12), ...boxIndices.slice(24), ...boxIndices.slice(12, 24)]);
+  box.clearGroups(); box.addGroup(0, 24, 0); box.addGroup(24, 12, 1);
   // Shared geometry and materials keep building batches inexpensive.
-  const materials = [wall, wall, roof, roof, wall, wall];
+  const materials = [wall, roof];
   const primary = buildings.filter((item) => !item.detailed);
   const secondary = buildings.filter((item) => item.detailed);
   const makeBatch = (items) => {

@@ -1,5 +1,16 @@
 const isHard = (ctx) => ['advanced', 'pro', 'devil', 'survival'].includes(ctx.difficulty);
 
+// Migrate the fire-owned offset in older saves once; leave unrelated thermal
+// faults alone. New fires use their own heat channel from the first tick.
+const prepareFireHeat = (engine, context) => {
+    if (context.fireHeatSeparated) return;
+    if (Number.isFinite(context.egtOffset) && context.egtOffset > 0 &&
+        Math.abs((engine.state.egtOffset || 0) - Math.min(900, context.egtOffset)) < 1) {
+        engine.state.egtOffset = 0;
+    }
+    context.fireHeatSeparated = true;
+};
+
 const EngineFailures = {
     ENGINE_FAILURE: {
         id: 'engine_failure',
@@ -67,6 +78,7 @@ const EngineFailures = {
                 effect: (sys, intensity, ctx) => {
                     const eng = sys.engines[ctx.engineIndex];
                     if (eng) {
+                        prepareFireHeat(eng, ctx);
                         eng.state.vibration = 5.0 + (intensity * 2.0);
                         if (ctx.egtOffset === undefined) ctx.egtOffset = 0;
                         if (intensity > 0.1 && !ctx.hasSpiked) {
@@ -75,7 +87,7 @@ const EngineFailures = {
                         }
                         const riseRate = isHard(ctx) ? 3.0 : 2.0;
                         ctx.egtOffset += riseRate * intensity;
-                        eng.state.egtOffset = ctx.egtOffset;
+                        eng.state.fireHeatInput = ctx.egtOffset;
                     }
                 }
             },
@@ -89,17 +101,23 @@ const EngineFailures = {
                 effect: (sys, intensity, ctx) => {
                     const eng = sys.engines[ctx.engineIndex];
                     if (eng) {
-                        if (!eng.state.failed && eng.state.egtOffset > 600 && Math.random() < 0.05) {
+                        prepareFireHeat(eng, ctx);
+                        const fire = sys.systems?.fire;
+                        const engineId = `eng${ctx.engineIndex + 1}`;
+                        ctx.extinguishCount ??= fire?.extinguishCount?.[engineId] || 0;
+                        if ((fire?.extinguishCount?.[engineId] || 0) > ctx.extinguishCount) {
+                            eng.state.fireHeatInput = 0;
+                            return;
+                        }
+                        if (!eng.state.failed && eng.state.fireHeatInput > 600 && Math.random() < 0.05) {
                             eng.setFailed(true, 'fire', 'critical');
                         }
-                        if (sys.systems && sys.systems.fire) {
-                            sys.systems.fire[`eng${ctx.engineIndex + 1}`] = true;
-                        }
+                        if (fire) fire[engineId] = true;
                         if (ctx.egtOffset === undefined) ctx.egtOffset = 0;
                         ctx.egtOffset += 0.5;
                         if (ctx.egtOffset < 400) ctx.egtOffset = 400;
-                        eng.state.egtOffset = ctx.egtOffset;
-                        if (eng.state.egtOffset > 900) eng.state.egtOffset = 900;
+                        eng.state.fireHeatInput = ctx.egtOffset;
+                        if (eng.state.fireHeatInput > 900) eng.state.fireHeatInput = 900;
                     }
                 }
             }

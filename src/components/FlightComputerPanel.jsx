@@ -3,10 +3,13 @@ import PropTypes from 'prop-types';
 import { airportService } from '../services/airportService';
 import { useLanguage } from '../contexts/LanguageContext';
 import './FlightComputerPanel.css';
+import FlightMapWorkspace from './FlightMapWorkspace';
+import NearbyLandingPorts from './NearbyLandingPorts';
+import { createDiversionPlan } from '../utils/diversionNavigation.js';
 
 const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightState, onActionRequest, aircraftModel, aircraftData }) => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState('waypoints'); // 'waypoints', 'add', 'nearest'
+  const [activeTab, setActiveTab] = useState('maps');
   const [waypoints, setWaypoints] = useState([]);
   
   // Manual Input State
@@ -20,8 +23,7 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
   const [searchType, setSearchType] = useState('all'); // 'all', 'normal', 'emergency'
   
   // Nearest State
-  const [nearestAirports, setNearestAirports] = useState([]);
-  const [loadingNearest, setLoadingNearest] = useState(false);
+
 
   // Utils State
   const [utilsTargetAlt, setUtilsTargetAlt] = useState(35000);
@@ -185,11 +187,11 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
     setActiveTab('waypoints');
   };
 
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
     if (searchQuery.length < 2) return;
     
-    const results = airportService.searchAirports(searchQuery, { 
+    const results = await airportService.searchAirportsRemote(searchQuery, { 
       type: searchType === 'all' ? 'all' : searchType,
       includeEmergency: searchType === 'emergency' || searchType === 'all'
     });
@@ -330,38 +332,11 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
     updateParent(newWaypoints);
   };
 
-  const findNearestAirports = () => {
-    if (!flightState || !flightState.latitude || !flightState.longitude) return;
-    
-    setLoadingNearest(true);
-    
-    // Get ALL airports and sort by distance (simple, robust approach)
-    const allAirports = airportService.getAllAirports();
-    
-    // Create a lightweight array for sorting to avoid mutating original or heavy operations
-    const airportsWithDist = allAirports.map(airport => {
-      const distance = airportService.calculateDistance(
-        { latitude: flightState.latitude, longitude: flightState.longitude },
-        { latitude: airport.latitude, longitude: airport.longitude }
-      );
-      return { airport, distance };
-    });
-    
-    // Sort by distance ascending
-    airportsWithDist.sort((a, b) => a.distance - b.distance);
-    
-    // Take top 20 and extract the airport object
-    const results = airportsWithDist.slice(0, 20).map(item => item.airport);
-    
-    setNearestAirports(results);
-    setLoadingNearest(false);
+  const handleDivert = airport => {
+    const plan = createDiversionPlan(flightPlan, airport);
+    setWaypoints(plan.waypoints);
+    onUpdateFlightPlan?.(plan);
   };
-
-  useEffect(() => {
-    if (activeTab === 'nearest') {
-      findNearestAirports();
-    }
-  }, [activeTab]);
 
   return (
     <div className="flight-computer-panel">
@@ -374,6 +349,7 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
       </div>
       
       <div className="fc-tabs">
+        <button className={activeTab === 'maps' ? 'active' : ''} onClick={() => setActiveTab('maps')}>Maps</button>
         <button className={activeTab === 'waypoints' ? 'active' : ''} onClick={() => setActiveTab('waypoints')}>{t('ui.flight_computer.tabs.plan')}</button>
         <button className={activeTab === 'add' ? 'active' : ''} onClick={() => setActiveTab('add')}>{t('ui.flight_computer.tabs.add')}</button>
         <button className={activeTab === 'nearest' ? 'active' : ''} onClick={() => setActiveTab('nearest')}>{t('ui.flight_computer.tabs.nearest')}</button>
@@ -381,6 +357,7 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
       </div>
       
       <div className="fc-content">
+        {activeTab === 'maps' && <><button className="direct-btn" onClick={() => setActiveTab('nearest')}>{t('ui.flight_computer.nearest.open')}</button><FlightMapWorkspace aircraftData={aircraftData} flightPlan={waypoints} flightState={flightState} /></>}
         {activeTab === 'waypoints' && (
           <div className="waypoints-list">
             {waypoints.length === 0 ? (
@@ -622,36 +599,7 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
           </div>
         )}
         
-        {activeTab === 'nearest' && (
-          <div className="nearest-section">
-            {loadingNearest ? (
-              <div>{t('ui.flight_computer.nearest.finding')}</div>
-            ) : nearestAirports.length === 0 ? (
-              <div>{t('ui.flight_computer.nearest.none')}</div>
-            ) : (
-              <ul className="nearest-list">
-                {nearestAirports.map(airport => {
-                   const dist = airportService.calculateDistance(
-                     { latitude: flightState.latitude, longitude: flightState.longitude },
-                     { latitude: airport.latitude, longitude: airport.longitude }
-                   );
-                   return (
-                    <li key={airport.icao} className="nearest-item">
-                      <div className="airport-details">
-                        <span className="code">{airport.iata || airport.icao}</span>
-                        <span className="name">{airport.name}</span>
-                        <span className="dist">{dist} nm</span>
-                        {airport.type === 'emergency' && <span className="tag emergency">{t('ui.flight_computer.nearest.emergency_tag')}</span>}
-                      </div>
-                      <button className="direct-btn" onClick={() => handleAddAirport(airport)}>{t('ui.flight_computer.nearest.add')}</button>
-                    </li>
-                   );
-                })}
-              </ul>
-            )}
-            <button className="refresh-btn" onClick={findNearestAirports}>{t('ui.flight_computer.nearest.refresh')}</button>
-          </div>
-        )}
+        {activeTab === 'nearest' && <NearbyLandingPorts flightState={flightState} aircraftData={aircraftData} onDivert={handleDivert} target={flightPlan?.diversionAirport} />}
 
         {activeTab === 'radio' && (
           <div className="radio-section" style={{ padding: '10px', color: '#e2e8f0' }}>

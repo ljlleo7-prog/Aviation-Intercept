@@ -70,6 +70,7 @@ const FlightInProgress = ({
   formatFuel,
   weatherData,
   setWeatherData,
+  failureSelection,
   failureType,
   crewCount,
   physicsModel = 'realistic',
@@ -78,7 +79,9 @@ const FlightInProgress = ({
   activeTutorial = null,
   activeChallenge = null,
   onTutorialClose,
-  offlineMode = false
+  offlineMode = false,
+  initialSave = null,
+  onRestoreFlight
 }) => {
 
 
@@ -267,6 +270,12 @@ const FlightInProgress = ({
     : (Array.isArray(flightPlan?.waypoints) ? flightPlan.waypoints : []);
 
   const aircraftConfig = useMemo(() => ({
+    initialSave,
+    sessionContext: {
+      selectedDeparture, selectedArrival, routeDetails, difficulty, failureType,
+      airline, callsign, pax, payload, fuelReserve, cruiseHeight, crewCount,
+      timeZulu, useRandomTime, season, useRandomSeason
+    },
     aircraftModel,
     payloadWeight: totalPayloadWeight,
     fuelWeight: flightPlanFuelWeight,
@@ -287,10 +296,14 @@ const FlightInProgress = ({
     departureRunway: (routeDetails?.departureRunway) || (flightPlan?.departure?.runways?.[0]?.name),
     arrivalRunway: (routeDetails?.landingRunway) || (flightPlan?.arrival?.runways?.[0]?.name),
     difficulty: difficulty,
+    failureSelection: isScenarioMode ? undefined : failureSelection,
     failureType: failureType,
+    failureContext: activeScenario?.launchConfig?.failureContext,
     scenarioRestrictions,
     scenarioMode: isScenarioMode
   }), [
+    initialSave, airline, callsign, pax, payload, fuelReserve, crewCount,
+    timeZulu, useRandomTime, season, useRandomSeason,
     aircraftModel,
     totalPayloadWeight,
     flightPlanFuelWeight,
@@ -306,7 +319,9 @@ const FlightInProgress = ({
     selectedDeparture,
     selectedArrival,
     difficulty,
+    failureSelection,
     failureType,
+    activeScenario?.launchConfig?.failureContext,
     scenarioRestrictions,
     isScenarioMode
   ]);
@@ -341,7 +356,7 @@ const FlightInProgress = ({
     aircraftModel, physicsService, enabled: isInitialized && !isCrashed,
     controls: {
       pitch: setPitch, roll: setRoll, yaw: setYaw, toeBrakes: setToeBrakes,
-      gear: setGear, flaps: setFlaps, throttle: setThrottle,
+      gear: setGear, flaps: setFlaps, throttle: setThrottle, airBrakes: setAirBrakes,
       parkingBrake: value => {
         performSystemAction?.('brakes', 'parkingBrake', value);
         setWheelBrakes(value ? 1 : 0);
@@ -376,7 +391,7 @@ const FlightInProgress = ({
   }, [flightData, initialLat, initialLon]);
 
   // Control state for UI components
-  const { language, t } = useLanguage();
+  const { language, t, tx } = useLanguage();
   const [, setThrottleControl] = useState(0); // Initialize at IDLE
   const [commandInput, setCommandInput] = useState('');
   const [radioMessages, setRadioMessages] = useState([]);
@@ -1062,28 +1077,6 @@ const FlightInProgress = ({
   });
 
   useEffect(() => {
-    if (!isInitialized || !physicsState || !setGear || !setFlaps) return;
-
-    const autopilotDebug = physicsState.autopilotDebug || {};
-    const ilsDebug = autopilotDebug.ils || {};
-    const ilsActive = autopilotDebug.mode === 'ILS' && ilsDebug.active;
-    const distAlongFt = Number.isFinite(ilsDebug.distAlong) ? ilsDebug.distAlong : Infinity;
-    const altitudeAglFt = Number.isFinite(physicsState?.derived?.altitude_agl_ft)
-      ? physicsState.derived.altitude_agl_ft
-      : Infinity;
-    const gearDown = physicsState?.gear === true || physicsState?.controls?.gear > 0.5;
-    const flapValue = Number.isFinite(physicsState?.flaps)
-      ? physicsState.flaps
-      : (Number.isFinite(physicsState?.controls?.flaps) ? physicsState.controls.flaps : 0);
-    const landingConfigGate = ilsActive && distAlongFt <= 6076 && altitudeAglFt <= 3000 && altitudeAglFt >= 80;
-    const landingFlapsTarget = 0.83;
-
-    if (!landingConfigGate) return;
-    if (!gearDown) setGear(true);
-    if (flapValue < landingFlapsTarget - 0.05) setFlaps(landingFlapsTarget);
-  }, [isInitialized, physicsState, setGear, setFlaps]);
-
-  useEffect(() => {
     let interval;
 
     if (useRealWeather) {
@@ -1642,8 +1635,8 @@ const FlightInProgress = ({
         color: 'white'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '24px', marginBottom: '20px' }}>✈️ Starting Flight Simulation...</div>
-          <div style={{ color: '#4ade80' }}>Initializing physics engine...</div>
+          <div style={{ fontSize: '24px', marginBottom: '20px' }}>{tx("✈️ Starting Flight Simulation...")}</div>
+          <div style={{ color: '#4ade80' }}>{tx("Initializing physics engine...")}</div>
         </div>
       </div>
     );
@@ -1661,8 +1654,8 @@ const FlightInProgress = ({
         color: 'white'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '24px', marginBottom: '20px', color: '#ef4444' }}>❌ Initialization Error</div>
-          <div style={{ marginBottom: '20px' }}>{error}</div>
+          <div style={{ fontSize: '24px', marginBottom: '20px', color: '#ef4444' }}>{tx("❌ Initialization Error")}</div>
+          <div style={{ marginBottom: '20px' }}>{tx(error)}</div>
           <button 
             onClick={() => window.location.reload()}
             style={{
@@ -1674,9 +1667,7 @@ const FlightInProgress = ({
               fontSize: '16px',
               cursor: 'pointer'
             }}
-          >
-            Reload Page
-          </button>
+          >{tx("Reload Page")}</button>
         </div>
       </div>
     );
@@ -1759,7 +1750,7 @@ const FlightInProgress = ({
                 alignItems: 'center',
                 gap: '6px'
               }}>
-                <span>⚠️ Checklist Incomplete</span>
+                <span>{tx("⚠️ Checklist Incomplete")}</span>
               </div>
               <div style={{
                 display: 'flex',
@@ -1832,7 +1823,7 @@ const FlightInProgress = ({
       </div>
 
       {sceneState.physicsActive && <OutsideFlightView
-        flightData={flightData}
+        flightData={{ ...flightData, systems: flightData?.systems || physicsState?.systems }}
         weatherData={weatherData}
         timeZulu={timeZulu}
         timeScale={timeScale}
@@ -1883,6 +1874,7 @@ const FlightInProgress = ({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', zIndex: 10 }}>
           <div style={{ padding: '4px 10px', background: '#111b25', color: '#b8c7d4', fontSize: '11px' }}>{flightKeyboardHelp}</div>
           <FlightPanelModular
+            timeZulu={timeZulu}
             flightData={{
               ...flightData,
               trueAirspeed: flightData?.trueAirspeed,
@@ -1913,7 +1905,7 @@ const FlightInProgress = ({
             playerSettingsError={offlineMode ? null : playerSettingsError}
             autoSaveStatus={offlineMode ? { isSaving: false, lastSavedAt: null, saveError: null } : autoSaveStatus}
             ilsRunwayOptions={ilsRunwayOptions}
-            onUpdatePlayerSettings={handlePlayerSettingsChange}
+            onUpdatePlayerSettings={offlineMode ? undefined : handlePlayerSettingsChange}
             visualQuality={visualQuality}
             onUpdateVisualQuality={(value) => setVisualQuality(writeVisualQuality(value))}
             onActionRequest={(action, payload, extra) => {
@@ -1986,6 +1978,18 @@ const FlightInProgress = ({
                   console.log(`📡 FlightPanel Action: ${action} = ${payload}`);
                   break;
                 }
+                case 'toggle-flight-director': {
+                  if (scenarioRestrictions.autopilotForbidden) break;
+                  if (physicsService?.autopilot) {
+                    physicsService.autopilot.setFlightDirectorEnabled(!physicsService.autopilot.flightDirectorEnabled);
+                  }
+                  break;
+                }
+                case 'set-autopilot-coupling': {
+                  if (scenarioRestrictions.autopilotForbidden) break;
+                  physicsService?.autopilot?.setCouplingMode(payload);
+                  break;
+                }
                 case 'toggle-vnav': {
                   if (scenarioRestrictions.autopilotForbidden) break;
                   if (physicsService?.setVNAVArmed) {
@@ -2009,7 +2013,7 @@ const FlightInProgress = ({
                   }
                   if (physicsService && typeof physicsService.updateAutopilotTargets === 'function' && payload) {
                     // Direct pass-through for RealisticAutopilotService (Imperial Units)
-                    // ModernAutopilotModule sends: { ias, vs, altitude }
+                    // Autopilot target updates: { ias, vs, altitude }
                     const targets = {
                       altitude: payload.altitude, // ft
                       speed: payload.ias,         // kts
@@ -2022,24 +2026,23 @@ const FlightInProgress = ({
                   console.log(`📡 FlightPanel Action: ${action} = ${JSON.stringify(payload)}`);
                   break;
                 }
-                case 'set-nav-frequency': {
-                  if (scenarioRestrictions.autopilotForbidden) {
-                    console.warn('NAV tuning is disabled because autopilot is forbidden for this challenge.');
+                case 'set-approach-reference': {
+                  if (scenarioRestrictions.autopilotForbidden) break;
+                  if (!payload) {
+                    physicsService?.setApproachReference(null);
                     break;
                   }
-                  if (physicsService && physicsService.autopilot && typeof physicsService.autopilot.setNavFrequency === 'function') {
-                    physicsService.autopilot.setNavFrequency(payload);
-
-                    const arrivalAirportCode = selectedArrival?.iata || selectedArrival?.icao;
-                    const matchedIlsRunway = ilsRunwayOptions.find((option) => Math.abs(option.ilsFrequency - payload) < 0.01);
-                    if (arrivalAirportCode && matchedIlsRunway && typeof physicsService.setRunwayGeometry === 'function') {
-                      const geometry = airportService.getRunwayGeometry(arrivalAirportCode, matchedIlsRunway.runwayName);
-                      if (geometry) {
-                        physicsService.setRunwayGeometry({ ...geometry, ilsFrequency: payload });
-                      }
-                    }
-                    console.log(`📡 FlightPanel Action: ${action} = ${payload}`);
+                  const geometry = airportService.getRunwayGeometry(payload.airportCode, payload.runwayName);
+                  if (geometry && geometry.headingSource !== 'designator-estimate') {
+                    physicsService?.setApproachReference(geometry);
                   }
+                  break;
+                }
+                case 'set-nav-frequency': {
+                  if (scenarioRestrictions.autopilotForbidden) break;
+                  // Tuning never changes the selected runway, even if another
+                  // runway happens to broadcast on the same frequency.
+                  physicsService?.autopilot?.setNavFrequency(Number(payload));
                   break;
                 }
                 case 'system-action': {
@@ -2050,9 +2053,7 @@ const FlightInProgress = ({
                   break;
                 }
                 case 'load-flight': {
-                  if (physicsService && typeof physicsService.loadFlightState === 'function') {
-                    physicsService.loadFlightState(payload);
-                  }
+                  onRestoreFlight?.(payload);
                   console.log(`📡 FlightPanel Action: ${action} = ${JSON.stringify(payload)}`);
                   break;
                 }

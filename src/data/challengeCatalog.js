@@ -26,7 +26,7 @@ export const CHALLENGES = [
     id: 'ils-landing-check',
     category: 'landing',
     title: 'ILS Landing Check',
-    summary: 'Configure and fly a stable ILS to prove the approach system works when set up correctly.',
+    summary: 'Configure and fly a stable ILS using instruments in 100 m visibility.',
     difficulty: 'Pro',
     duration: '4-6 min',
     challengeMode: 'systems',
@@ -39,7 +39,7 @@ export const CHALLENGES = [
         type: 'cloudy',
         windSpeed: 9,
         windDirection: 245,
-        visibility: 5,
+        visibility: 0.1, // Kilometers: 100 m.
         ceiling: 1800,
         precipitation: 0,
         turbulence: 0.08
@@ -57,7 +57,7 @@ export const CHALLENGES = [
       restrictions: {
         guidesDisabled: true,
         autopilotForbidden: false,
-        instrumentsOnly: false
+        instrumentsOnly: true
       },
       validation: {
         profile: 'stable_spawn',
@@ -73,7 +73,7 @@ export const CHALLENGES = [
     id: 'manual-instrument-landing',
     category: 'landing',
     title: 'Manual Instrument Landing',
-    summary: 'Fly the same kind of approach by raw instruments only. No autopilot, no guides, almost no outside cues.',
+    summary: 'Fly the approach by raw instruments in 100 m visibility. No autopilot or guides.',
     difficulty: 'Devil',
     duration: '4-6 min',
     challengeMode: 'gut-check',
@@ -86,7 +86,7 @@ export const CHALLENGES = [
         type: 'stormy',
         windSpeed: 12,
         windDirection: 250,
-        visibility: 0.6,
+        visibility: 0.1, // Kilometers: 100 m.
         ceiling: 350,
         precipitation: 0.2,
         turbulence: 0.12
@@ -253,8 +253,8 @@ export const CHALLENGES = [
     difficulty: 'Devil',
     duration: '3-6 min',
     challengeMode: 'failures',
-    departureCode: 'KPHX',
-    arrivalCode: 'KTUS',
+    departureCode: 'KSFO',
+    arrivalCode: 'KLAX',
     launchConfig: {
       difficulty: 'devil',
       failureType: 'dual_engine_failure',
@@ -268,8 +268,8 @@ export const CHALLENGES = [
         turbulence: 0.02
       },
       routeDetails: {
-        departureRunway: '26',
-        landingRunway: '11L'
+        departureRunway: '28R',
+        landingRunway: '25L'
       },
       spawnPreset: {
         type: 'enroute-midpoint',
@@ -299,6 +299,7 @@ export const CHALLENGES = [
     launchConfig: {
       difficulty: 'devil',
       failureType: 'major_hydraulic_failure',
+      failureContext: { totalHydraulicLoss: true },
       weatherData: {
         type: 'cloudy',
         windSpeed: 10,

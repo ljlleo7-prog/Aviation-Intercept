@@ -4,26 +4,8 @@ import { canonicalAirportCode, projectGroundPoint } from './airportGroundCoordin
 export { canonicalAirportCode, projectGroundPoint, unprojectGroundPoint } from './airportGroundCoordinates.js';
 
 const DEG = Math.PI / 180;
-export function pointInRing([x, z], ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [a, b] = ring[i]; const [c, d] = ring[j];
-    if ((b > z) !== (d > z) && x < (c - a) * (z - b) / (d - b) + a) inside = !inside;
-  }
-  return inside;
-}
-export const pointInArea = (point, area) => area.some(([outer, ...holes]) => pointInRing(point, outer) && !holes.some((hole) => pointInRing(point, hole)));
-
-export function distanceToPath(point, path) {
-  let closest = Infinity;
-  for (let i = 1; i < path.length; i++) {
-    const a = path[i - 1]; const b = path[i];
-    const dx = b[0] - a[0]; const dz = b[1] - a[1];
-    const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / (dx * dx + dz * dz || 1)));
-    closest = Math.min(closest, Math.hypot(point[0] - a[0] - t * dx, point[1] - a[1] - t * dz));
-  }
-  return closest;
-}
+import { distanceToPath } from './airportGroundSurface.js';
+export { pointInRing, pointInArea, distanceToPath } from './airportGroundSurface.js';
 
 export function groundAlignment(layout, referenceRunways) {
   const deltas = [];
@@ -83,8 +65,18 @@ const cleanArea = (area) => area.map((rings) => rings.map((ring) => {
   return unique;
 }).filter((ring) => ring.length >= 4)).filter((rings) => rings.length);
 export const unionAreas = (areas) => {
-  const valid = areas.filter((area) => area?.length).map(cleanArea).filter((area) => area.length);
-  return valid.length ? polygonClipping.union(...valid) : [];
+  let valid = areas.filter((area) => area?.length).map(cleanArea).filter((area) => area.length);
+  // Large hubs contain hundreds of intersecting taxiway strips. Merge in a
+  // balanced tree and re-snap intermediate intersections to avoid unstable
+  // sweep-line events from one enormous boolean operation.
+  while (valid.length > 1) {
+    const next = [];
+    for (let i = 0; i < valid.length; i += 2) {
+      next.push(i + 1 < valid.length ? cleanArea(polygonClipping.union(valid[i], valid[i + 1])) : valid[i]);
+    }
+    valid = next;
+  }
+  return valid[0] || [];
 };
 export const subtractAreas = (area, ...others) => area.length ? polygonClipping.difference(cleanArea(area), ...others.filter((other) => other.length).map(cleanArea)) : [];
 export const intersectAreas = (a, b) => a.length && b.length ? polygonClipping.intersection(cleanArea(a), cleanArea(b)) : [];
@@ -169,13 +161,38 @@ export function normalizeGroundRunways(runways, origin) {
   }).sort((a, b) => a.path[0][0] - b.path[0][0] || a.path[0][1] - b.path[0][1]);
 }
 
-function roundedConnection(a, b, c) {
-  const path = [a];
-  for (let i = 1; i <= 8; i++) {
-    const t = i / 8; const u = 1 - t;
-    path.push([u * u * a[0] + 2 * u * t * b[0] + t * t * c[0], u * u * a[1] + 2 * u * t * b[1] + t * t * c[1]]);
+function pathsClearance(first, second) {
+  let nearest = Math.min(...first.map((point) => distanceToPath(point, second)), ...second.map((point) => distanceToPath(point, first)));
+  for (let i = 1; i < first.length && nearest > 0; i++) for (let j = 1; j < second.length; j++) {
+    const a = first[i - 1]; const b = first[i]; const c = second[j - 1]; const d = second[j];
+    const dx = b[0] - a[0]; const dz = b[1] - a[1]; const ex = d[0] - c[0]; const ez = d[1] - c[1];
+    const cross = dx * ez - dz * ex;
+    if (Math.abs(cross) < 1e-8) continue;
+    const t = ((c[0] - a[0]) * ez - (c[1] - a[1]) * ex) / cross;
+    const u = ((c[0] - a[0]) * dz - (c[1] - a[1]) * dx) / cross;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) nearest = 0;
+  }
+  return nearest;
+}
+
+// A straight runway lead-out followed by a quarter turn onto the parallel.
+function runwayEntry(at, s, side, offset, runwayWidth, direction, radius) {
+  const path = [at(s, (runwayWidth / 2 - 2) * side), at(s, (offset - radius) * side)];
+  for (let i = 1; i <= 6; i++) {
+    const angle = i / 6 * Math.PI / 2;
+    path.push(at(s + direction * radius * (1 - Math.cos(angle)), (offset - radius + radius * Math.sin(angle)) * side));
   }
   return path;
+}
+
+function runwayExit(at, s, side, offset, runwayWidth, runout) {
+  const controls = [at(s, (runwayWidth / 2 - 2) * side), at(s + runout * .45, (runwayWidth / 2 + offset * .4) * side),
+    at(s + runout * .7, offset * side), at(s + runout, offset * side)];
+  return Array.from({ length: 9 }, (_, i) => {
+    const t = i / 8; const u = 1 - t;
+    return [0, 1].map((axis) => u ** 3 * controls[0][axis] + 3 * u * u * t * controls[1][axis]
+      + 3 * u * t * t * controls[2][axis] + t ** 3 * controls[3][axis]);
+  });
 }
 
 export function createProceduralGround(airportCode, runways, origin) {
@@ -186,39 +203,68 @@ export function createProceduralGround(airportCode, runways, origin) {
     const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
     const dx = (b[0] - a[0]) / length; const dz = (b[1] - a[1]) / length;
     const at = (s, offset) => [a[0] + dx * s - dz * offset, a[1] + dz * s + dx * offset];
-    const width = length < 1400 ? 15 : 23;
-    const offset = Math.max(strip.width * 2.4, length < 1400 ? 110 : 190);
+    if (length < 150) continue;
+    const small = length < 1400;
+    const width = small ? 15 : 23;
+    const offset = Math.max(strip.width * 2.4, small ? 110 : 190);
+    const apronGap = small ? 65 : 100;
+    const apronDepth = small ? 120 : 200;
+    const apronLength = Math.min(750, length * .32);
+    const apronCenter = length * (strips.length === 1 ? .53 : stripIndex % 2 ? .68 : .35);
+    const apronStart = apronCenter - apronLength / 2;
+    const apronEnd = apronCenter + apronLength / 2;
+    const nearOffset = offset + apronGap;
+    const farOffset = nearOffset + apronDepth;
+    const otherStrips = strips.filter((other) => other !== strip);
+    const routeClear = (path, routeWidth = width) => otherStrips.every((other) => pathsClearance(path, other.path) > other.width / 2 + routeWidth / 2 + 25);
     const candidates = [-1, 1].map((side) => {
-      const path = [at(70, offset * side), at(length - 70, offset * side)];
-      const clearance = Math.min(...strips.filter((other) => other !== strip).map((other) => Math.min(...path.map((point) => distanceToPath(point, other.path) - other.width / 2))), 1e6);
-      return { side, path, clearance };
-    }).sort((left, right) => right.clearance - left.clearance);
-    const { side, path, clearance } = candidates[0];
+      const path = [at(15, offset * side), at(length - 15, offset * side)];
+      const clearance = Math.min(...otherStrips.map((other) => pathsClearance(path, other.path) - other.width / 2), 1e6);
+      const apronRing = [at(apronStart, nearOffset * side), at(apronEnd, nearOffset * side),
+        at(apronEnd, farOffset * side), at(apronStart, farOffset * side), at(apronStart, nearOffset * side)];
+      const area = [[apronRing]];
+      const apronClear = strips.every((other) => !intersectAreas(area, pathFootprint(other.path, other.width + 100)).length)
+        && aprons.every((other) => !intersectAreas(area, other.area).length);
+      return { side, path, clearance, apronRing, apronClear };
+    }).sort((left, right) => Number(routeClear(right.path)) - Number(routeClear(left.path))
+      || Number(right.apronClear) - Number(left.apronClear) || right.clearance - left.clearance);
+    const { side, path, apronRing, apronClear } = candidates[0];
     landAreas.push(pathFootprint(strip.path, strip.width + 130));
-    if (clearance < 70) continue;
-    taxiways.push({ path, width, source: 'procedural' });
-    for (const fraction of [.08, .32, .68, .92]) {
-      const s = length * fraction;
-      const connector = roundedConnection(at(s, strip.width / 2 * side), at(s, offset * .75 * side), at(Math.min(length - 70, s + 65), offset * side));
-      if (strips.some((other) => other !== strip && connector.some((point) => distanceToPath(point, other.path) < other.width / 2 + width))) continue;
-      taxiways.push({ path: connector, width, source: 'procedural' });
+    if (!routeClear(path)) continue;
+    const addTaxiway = (route, role) => {
+      if (!routeClear(route)) return false;
+      taxiways.push({ path: route, width, role, runwayIndex: stripIndex, source: 'procedural' });
+      return true;
+    };
+    addTaxiway(path, 'parallel');
+    const radius = small ? 22 : 38;
+    const endInset = Math.min(45, length * .07);
+    addTaxiway(runwayEntry(at, endInset, side, offset, strip.width, 1, radius), 'runway-entry');
+    addTaxiway(runwayEntry(at, length - endInset, side, offset, strip.width, -1, radius), 'runway-entry');
+    addTaxiway(runwayEntry(at, length * .32, side, offset, strip.width, 1, radius), 'runway-exit');
+    for (const fraction of [.55, .75]) {
+      const runout = Math.min(small ? 70 : 190, length * .1);
+      addTaxiway(runwayExit(at, length * fraction, side, offset, strip.width, runout), 'runway-exit');
     }
-    const apronOffset = (offset + 130) * side;
-    const apronLength = Math.min(700, length * .38);
-    const center = length * .52;
-    const apronRing = [at(center - apronLength / 2, (offset - width / 2) * side), at(center + apronLength / 2, (offset - width / 2) * side),
-      at(center + apronLength / 2, (offset + 240) * side), at(center - apronLength / 2, (offset + 240) * side)];
-    apronRing.push(apronRing[0]);
-    if (!strips.some((other) => other !== strip && apronRing.some((point) => distanceToPath(point, other.path) < other.width / 2 + 100))) {
-      aprons.push({ area: [[apronRing]], source: 'procedural' });
-      for (let i = 0; i < 4; i++) {
-        const [x, z] = at(center - apronLength * .32 + i * apronLength * .21, (offset + 210) * side);
-        buildings.push({ x, z, width: Math.min(110, apronLength * .18), depth: 45, height: i === 0 ? 22 : 13,
-          heading: -Math.atan2(dz, dx), detailed: i !== 0, source: 'procedural' });
+    if (apronClear) {
+      const apronLaneOffset = nearOffset + Math.min(55, apronDepth * .3);
+      const apronLinks = [.22, .78].map((fraction) => [at(apronStart + apronLength * fraction, offset * side),
+        at(apronStart + apronLength * fraction, apronLaneOffset * side)]);
+      if (apronLinks.every((link) => routeClear(link))) {
+        aprons.push({ area: [[apronRing]], runwayIndex: stripIndex, source: 'procedural' });
+        apronLinks.forEach((link) => addTaxiway(link, 'apron-link'));
+        addTaxiway([at(apronStart + apronLength * .08, apronLaneOffset * side),
+          at(apronEnd - apronLength * .08, apronLaneOffset * side)], 'apron-taxilane');
+        for (let i = 0; i < 4; i++) {
+          const [x, z] = at(apronStart + apronLength * (.14 + i * .24), (farOffset - 28) * side);
+          buildings.push({ x, z, width: Math.min(110, apronLength * .18), depth: 45, height: i === 0 ? 22 : 13,
+            heading: -Math.atan2(dz, dx), detailed: i !== 0, source: 'procedural' });
+        }
+        roads.push({ path: [at(apronStart, (farOffset + 25) * side), at(apronEnd, (farOffset + 25) * side)], width: 9 });
       }
-      roads.push({ path: [at(center - apronLength / 2, (offset + 270) * side), at(center + apronLength / 2, (offset + 270) * side)], width: 9 });
     }
-    landAreas.push(pathFootprint([at(0, apronOffset / 2), at(length, apronOffset / 2)], Math.abs(apronOffset) + 450));
+    const landExtent = apronClear ? farOffset + 65 : offset + 75;
+    landAreas.push(pathFootprint([at(-40, (landExtent - 100) / 2 * side), at(length + 40, (landExtent - 100) / 2 * side)], landExtent + 100));
     // Separate runway groups retain their own connected apron instead of false crossings.
     if (stripIndex > 5) break;
   }

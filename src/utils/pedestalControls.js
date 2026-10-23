@@ -1,3 +1,6 @@
+// Negative zero represents reverse idle; positive zero is forward idle.
+export const isReverseThrustCommand = command => command < 0 || Object.is(command, -0);
+
 export const clampThrust = value => Math.max(-0.7, Math.min(1, Number.isFinite(value) ? value : 0));
 
 export function thrustLeverCommand(position, reverse) {

@@ -40,7 +40,10 @@ const buildPhysics = async ({ lat, lon, altitudeFt, heading, speedKts, runwayGeo
   physics.state.geo.lat = lat;
   physics.state.geo.lon = lon;
   physics.state.vel.set(speedKts * 0.514444, 0, 0);
-  if (runwayGeom) physics.setRunwayGeometry(runwayGeom);
+  if (runwayGeom) {
+    physics.setRunwayGeometry(runwayGeom);
+    physics.setApproachReference(runwayGeom);
+  }
   physics.setMotionEnabled(true);
   physics.setEnvironment({
     windSpeed,

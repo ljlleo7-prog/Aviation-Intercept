@@ -63,7 +63,7 @@ const CinematicReview = ({ callsign, selectedDeparture, selectedArrival, aircraf
           <div className="fax-section">
             <div className="fax-section-title">{t('ui.cinematic.sections.flight_data')}</div>
             <div className="fax-grid">
-              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.operator')}</span> <span className="fax-value">SKYLINE TRAGEDY</span></div>
+              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.operator')}</span> <span className="fax-value">AVIATION INTERCEPT</span></div>
               <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.aircraft')}</span> <span className="fax-value">{safeAircraftModel}</span></div>
               <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.origin')}</span> <span className="fax-value">{safeDepartureIata}</span></div>
               <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.destination')}</span> <span className="fax-value">{safeArrivalIata}</span></div>

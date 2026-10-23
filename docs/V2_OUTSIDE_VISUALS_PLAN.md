@@ -186,8 +186,8 @@ Proposed starting budgets, to be validated on representative devices:
 
 | Metric | Balanced desktop | Economy / integrated GPU |
 | --- | ---: | ---: |
-| Target frame rate | stable 45–60 fps | stable 30 fps |
-| Canvas render scale | DPR capped at 1.25 | DPR 0.75–1.0 |
+| Target frame rate | capped at 30 fps | capped at 20 fps |
+| Canvas render scale | DPR ≤1.0, ≤420,000 pixels | DPR ≤0.65, ≤200,000 pixels |
 | Draw calls on final | at most 80 | at most 45 |
 | Visible triangles | at most 150k | at most 60k |
 | Visual-system GPU memory | at most 160 MB | at most 80 MB |
@@ -200,14 +200,16 @@ These are engineering gates, not promises. Measure them with the complete replic
 
 Offer three profiles and an instrument-only fallback:
 
-- **Economy:** 30 fps target, reduced render scale, simple sky, fog, runway, essential lights, few silhouettes, no shadows.
-- **Balanced:** 45–60 fps target, full surface materials, cloud layer, precipitation, normal maps, more silhouettes.
+- **Economy:** 20 fps cap, reduced render scale, full airport layout, essential lights, fewer decorative buildings, no shadows.
+- **Balanced:** 30 fps cap, full airport layout and surface detail, more buildings. Future weather/material enhancements remain subject to the shared render-pixel budget.
 - **High:** higher render scale, optional restrained shadowing, denser decorative details; still uses the same airport bubble.
 - **Instrument only:** no WebGL canvas; current cockpit behavior remains usable.
 
 An automatic governor may lower render scale after sustained missed frame time and raise it only after a long stable interval. It should never switch major visual features repeatedly during final approach. Lock the chosen feature set below 1,500 ft AGL and vary render scale gradually if needed.
 
 Store the user's chosen profile and provide a frame-rate/render-scale readout in development settings. Do not make the normal pilot UI display engine metrics.
+
+The implemented renderer now batches runway markings, uses a low-power GPU preference, skips unchanged frames and stops animation scheduling when hidden/offscreen. A brief isolated KLAX check dropped from 232 to 24 draw calls after batching; this is a render-submission comparison, not a whole-application thermal benchmark. Balanced remains the default. The high-altitude Economy switch uses 11,000/9,000 ft AGL hysteresis.
 
 ## 9. Visual-state contract
 

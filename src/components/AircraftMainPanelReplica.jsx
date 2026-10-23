@@ -5,6 +5,7 @@ import { Replica as B737Replica } from '../../previews/737-main-panel-replica.js
 import { AircraftPanelGraphic } from '../../previews/main-panel-replicas.jsx';
 import './AircraftMainPanelReplica.css';
 import CockpitPilotControls from './CockpitPilotControls.jsx';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const PANEL_BY_ICAO = {
   B738: '737',
@@ -20,10 +21,21 @@ const PANEL_BY_ICAO = {
 const LEGACY_CENTRAL_PANELS = new Set(['737', '777', '320', '340']);
 
 export default function AircraftMainPanelReplica({ aircraftModel, flightState, flightPlan, npcs = [], onAutopilotAction, children }) {
+  const { tx } = useLanguage();
   const panelKey = PANEL_BY_ICAO[resolveICAO(aircraftModel)];
+  const airbusControls = ['320', '340', '350', '380'].includes(panelKey);
   const boeingControls = ['737', '747', '757', '777'].includes(panelKey);
   const legacyCentralPanel = Children.toArray(children)[2];
   const instrumentData = useMemo(() => ({
+    aircraftModel,
+    labels: {
+      flightDirector: tx('Flight director'),
+      guidance: tx('ILS approach guidance'),
+      localizer: tx('Localizer deviation'),
+      glideslope: tx('Glideslope deviation'),
+      commands: tx('Flight director pitch and roll commands')
+    },
+    lighting: flightState?.systems?.lighting,
     ias: flightState?.indicatedAirspeed,
     trueAirspeed: flightState?.trueAirspeed,
     groundSpeed: flightState?.groundSpeed,
@@ -42,11 +54,19 @@ export default function AircraftMainPanelReplica({ aircraftModel, flightState, f
     gearDown: flightState?.gearDown ?? flightState?.gearValue > 0.5,
     autopilot: flightState?.autopilot,
     autopilotMode: flightState?.autopilotMode,
+    ils: flightState?.autopilotDebug?.ils,
+    approachSelected: flightState?.autopilotMode === 'ILS',
+    flightDirector: flightState?.flightDirector,
+    couplingMode: flightState?.couplingMode,
     vnavArmed: flightState?.vnavArmed,
     autothrottleArmed: flightState?.autothrottleArmed,
     autopilotTargets: flightState?.autopilotTargets,
     onAutopilotAction,
-    fma: flightState?.autopilotFma?.summary || flightState?.autopilotMode,
+    fma: (flightState?.autopilot || flightState?.flightDirector?.enabled)
+      ? [flightState?.autopilotFma?.thrust?.active?.label,
+        flightState?.autopilotFma?.lateral?.active?.label,
+        flightState?.autopilotFma?.vertical?.active?.label].filter(Boolean).join(' · ') || flightState?.autopilotMode
+      : '---',
     targetIas: flightState?.autopilotTargets?.ias ?? flightState?.autopilotTargets?.speed,
     targetAltitude: flightState?.autopilotTargets?.altitude,
     targetVerticalSpeed: flightState?.autopilotTargets?.vs,
@@ -54,6 +74,7 @@ export default function AircraftMainPanelReplica({ aircraftModel, flightState, f
     nextWaypoint: flightState?.nextWaypoint,
     distanceToWaypoint: flightState?.distanceToWaypoint,
     warnings: flightState?.activeWarnings,
+    alertState: flightState?.alertState,
     hydraulicPressure: flightState?.hydraulicPressure,
     oilPressure: flightState?.oilPressure,
     flightPhase: flightState?.flightPhase,
@@ -63,15 +84,15 @@ export default function AircraftMainPanelReplica({ aircraftModel, flightState, f
     navigationPath: flightState?.navigationPath,
     npcs,
     waypoints: Array.isArray(flightPlan) ? flightPlan : flightPlan?.fms?.activePlan?.waypoints || flightPlan?.waypoints || [],
-  }), [flightPlan, flightState, npcs, onAutopilotAction]);
+  }), [aircraftModel, flightPlan, flightState, npcs, onAutopilotAction, tx]);
 
   if (!panelKey) return <div className="main-panels">{children}</div>;
 
-  return <section className={`aircraft-main-panel aircraft-main-panel-${panelKey} ${boeingControls ? 'has-boeing-controls' : ''}`} aria-label={`${aircraftModel || panelKey} main instrument panel`}>
+  return <section className={`aircraft-main-panel aircraft-main-panel-${panelKey} ${boeingControls ? 'has-boeing-controls' : airbusControls ? 'has-airbus-controls' : ''}`} aria-label={`${aircraftModel || panelKey} main instrument panel`}>
     <div className="aircraft-main-panel-scroll">
       <div className={`aircraft-main-panel-stage aircraft-main-panel-stage-${panelKey}`}>
         {panelKey === '737' ? <B737Replica className="aircraft-panel-svg" instrumentData={instrumentData}/> : <AircraftPanelGraphic modelKey={panelKey} className="aircraft-panel-svg" instrumentData={instrumentData}/>} 
-        {boeingControls && <CockpitPilotControls flightState={flightState} onAction={onAutopilotAction} overlay/>}
+        {(boeingControls || airbusControls) && <CockpitPilotControls flightState={flightState} onAction={onAutopilotAction} isAirbus={airbusControls} overlay/>}
         {LEGACY_CENTRAL_PANELS.has(panelKey) && <div className="aircraft-main-panel-legacy-central">{legacyCentralPanel}</div>}
       </div>
     </div>

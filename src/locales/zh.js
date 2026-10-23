@@ -25,7 +25,7 @@ const zh = {
         rainy: {
             0: {
                 title: '雨中登机',
-                content: '乘客们匆忙登机，雨水敲打着机身。“请小心脚下，”机组人员建议道。前往 ${arrival} 的是一个阴雨天。'
+                content: '乘客们匆忙登机，雨水敲打着机身。“请小心脚下，”机组人员建议道。我们将在阴雨中启程前往 ${arrival}。'
             }
         },
         shakespearean: {
@@ -42,7 +42,7 @@ const zh = {
             content: '无线电发出滋滋声。“${callsign}，许可前往 ${arrival}，按飞行计划航线飞行。爬升并保持 FL350。离场频率 124.7。应答机 4211。”系统上线时，你复诵了放行许可。'
           },
           1: {
-            title: '放行交付',
+            title: '抄收放行许可',
             content: '“${callsign}，准备抄收放行许可。”“许可前往 ${arrival}，保持 5000，起飞后 10 分钟预期 FL350。”笔在纸上沙沙作响。“复诵正确。”'
           },
           2: {
@@ -61,21 +61,21 @@ const zh = {
         default: {
           0: {
             title: '推出许可',
-            content: '拖车连接时轻轻一震。“地面呼叫驾驶舱，刹车松开。”当你启动引擎时，航站楼慢慢远去。APU 的嗡嗡声被主涡轮的轰鸣声取代。'
+            content: '拖车连接时轻轻一震。“地面呼叫驾驶舱，刹车松开。”当你启动发动机时，航站楼慢慢远去。APU 的嗡嗡声被主涡轮的轰鸣声取代。'
           },
           1: {
-            title: '启动引擎',
-            content: '“推出完成，设置停留刹车。”“启动 2 号引擎。”N2 上升，随后是燃油流量和点火。启动正常。“启动 1 号引擎。”'
+            title: '启动发动机',
+            content: '“推出完成，设置停留刹车。”“启动 2 号发动机。”N2 上升，随后是燃油流量和点火。启动正常。“启动 1 号发动机。”'
           },
           2: {
-            title: '更好的推出',
-            content: '拖车将我们推到滑行道上。“许可启动。”引擎啸叫着苏醒。“拖杆已断开，左侧手势信号。”我们依靠自己的动力了。'
+            title: '推出完成',
+            content: '拖车将我们推到滑行道上。“许可启动。”发动机啸叫着苏醒。“拖杆已断开，左侧手势信号。”我们依靠自己的动力了。'
           }
         },
         rainy: {
             0: {
                 title: '湿滑推出',
-                content: '推出时雨水划过挡风玻璃。停机坪在灯光下闪闪发光。“引擎启动许可。”喷气流在我们身后卷起水雾。'
+                content: '推出时雨水划过挡风玻璃。停机坪在灯光下闪闪发光。“发动机启动许可。”喷气流在我们身后卷起水雾。'
             }
         },
         shakespearean: {
@@ -123,7 +123,7 @@ const zh = {
         default: {
           0: {
             title: '对正并等待',
-            content: '在跑道 ${departureRunway} 上对正。刹车设置。引擎慢车。“塔台，${callsign} 在跑道 ${departureRunway} 等待，准备起飞。”检查襟翼、配平并核实起飞数据。'
+            content: '在跑道 ${departureRunway} 上对正。刹车设置。发动机慢车。“塔台，${callsign} 在跑道 ${departureRunway} 等待，准备起飞。”检查襟翼、配平并核实起飞数据。'
           },
           1: {
             title: '等待位置',
@@ -131,7 +131,7 @@ const zh = {
           },
           2: {
             title: '最后检查',
-            content: '起飞前检查单完成。“接近离场。”引擎稳定。“准备好了吗？”机长问道。“准备好了，”你回答。'
+            content: '起飞前检查单完成。“接近离场。”发动机稳定。“准备好了吗？”机长问道。“准备好了，”你回答。'
           }
         },
         rookie: {
@@ -149,7 +149,7 @@ const zh = {
         default: {
           0: {
             title: '起飞许可',
-            content: '在跑道 ${departureRunway} 上对正。“风向 130，风速 8，跑道 ${departureRunway} 许可起飞。”油门向前。引擎轰鸣，将你推向座椅。在 Vr 抬轮。'
+            content: '在跑道 ${departureRunway} 上对正。“风向 130，风速 8，跑道 ${departureRunway} 许可起飞。”油门向前。发动机轰鸣，将你推向座椅。在 Vr 抬轮。'
           },
           1: {
             title: '滑跑',
@@ -223,7 +223,7 @@ const zh = {
           },
           1: {
             title: '通过 FL180',
-            content: '“标准气压。”空气稀薄而寒冷。引擎在这里效率很高。为长途飞行安顿下来。'
+            content: '“标准气压。”空气稀薄而寒冷。发动机在这里效率很高。为长途飞行安顿下来。'
           },
           2: {
             title: '高高度',
@@ -241,7 +241,7 @@ const zh = {
         default: {
           0: {
             title: '巡航在 FL350',
-            content: '平飞在 35,000 英尺。地平线是一条弯曲的雾霾线。“保持马赫 0.78。”引擎发出平稳、令人安心的节奏。乘客们正安顿下来准备前往 ${arrival}。'
+            content: '平飞在 35,000 英尺。地平线是一条弯曲的雾霾线。“保持马赫 0.78。”发动机发出平稳、令人安心的节奏。乘客们正安顿下来准备前往 ${arrival}。'
           },
           1: {
             title: '平稳飞行',
@@ -329,7 +329,7 @@ const zh = {
           },
           1: {
             title: '已着陆',
-            content: '稳固接地。“收减速板，反推正常。”减速。“下一个滑行道脱离。”我们做到了。'
+            content: '稳固接地。“减速板放出，反推正常。”减速。“下一个滑行道脱离。”我们做到了。'
           },
           2: {
             title: '到达',
@@ -357,11 +357,11 @@ const zh = {
           },
           1: {
             title: '泊位',
-            content: '清理飞机。收襟翼，关灯。接近航站楼。引导员挥手示意我们进入。'
+            content: '恢复着陆后构型。收襟翼，关闭相关灯光。接近航站楼。引导员挥手示意我们进入。'
           },
           2: {
             title: '到达登机口',
-            content: '转入登机口。“停止。”设置停留刹车。引擎冷却。欢迎回家。'
+            content: '转入登机口。“停止。”设置停留刹车。发动机冷却。欢迎回家。'
           }
         },
         shakespearean: {
@@ -374,8 +374,8 @@ const zh = {
       shutoff: {
         default: {
           0: {
-            title: '引擎关车',
-            content: '设置停留刹车。切断燃油。引擎旋转减速至静止。APU 关闭。“感谢您的搭乘。”飞行完成。'
+            title: '发动机关车',
+            content: '设置停留刹车。切断燃油。发动机旋转减速至静止。APU 关闭。“感谢您的搭乘。”飞行完成。'
           },
           1: {
             title: '讲评',
@@ -397,9 +397,9 @@ const zh = {
   },
   failures: {
     engine: {
-      minor: '引擎 ${engineIndex + 1} 显示异常振动。密切监视。',
-      critical: '引擎 ${engineIndex + 1} 失效！需要立即采取行动！',
-      resolved: '引擎 ${engineIndex + 1} 恢复正常运行。'
+      minor: '发动机 ${engineIndex + 1} 显示异常振动。密切监视。',
+      critical: '发动机 ${engineIndex + 1} 失效！需要立即采取行动！',
+      resolved: '发动机 ${engineIndex + 1} 恢复正常运行。'
     },
     hydraulic: {
       minor: '主液压压力下降。检查系统。',
@@ -451,15 +451,15 @@ const zh = {
     },
     systems: {
         status: '系统状态',
-        engines: '引擎',
-        electrics: '电力',
+        engines: '发动机',
+        electrics: '电气',
         hydraulics: '液压',
         fuel: '燃油',
         apu: 'APU',
         pumps: '泵',
         generators: '发电机',
-        batteries: '电池',
-        engine_and_systems: '引擎与系统',
+        batteries: '蓄电池',
+        engine_and_systems: '发动机与系统',
         overhead_panel_short: '顶板',
         system_status_alerts: '系统状态 / 警报',
         no_active_alerts: '无活动警报',
@@ -521,6 +521,16 @@ const zh = {
             submit: '搜索'
         },
         nearest: {
+            open: '附近备降机场',
+            radius: '搜索半径',
+            suitability: '按机型跑道要求筛选机场。着陆前请核实条件。',
+            map: '附近备降机场地图',
+            distance: '距离',
+            bearing: '方位',
+            left: '左',
+            right: '右',
+            divert: '直飞备降',
+
             finding: '正在搜索机场...',
             none: '未找到机场。',
             emergency_tag: '应急',
@@ -623,12 +633,30 @@ const zh = {
     }
   },
   initialization: {
-    title: '天际绝唱 - 航班初始化',
+    title: '空中豪截 - 航班初始化',
     subtitle: '配置您的飞行参数并选择难度等级',
     steps: {
       1: '01. 操作等级与情报',
       2: '02. 飞行参数',
       3: '03. 航线选择'
+    },
+    failures: {
+      profiles: {
+        rookie: '仅简单故障，同时最多一个；无随机连锁故障。部分故障库没有适合新手的故障。难度限制可能减少实际故障数。',
+        amateur: '可控故障，同时最多一个；有限连锁反应。',
+        intermediate: '较严重故障，同时最多两个；标准连锁反应。',
+        advanced: '复杂紧急情况，同时最多三个；连锁反应更快。',
+        pro: '可能出现灾难性故障，同时最多四个；较强连锁反应。',
+        devil: '优先触发系统故障链；同时最多五个随机故障，另可产生更快、更强的跨系统连锁故障。',
+      },
+
+      edit: '修改难度',
+      title: '故障概率', normal: '正常模拟', custom: '不太正常',
+      count: '每航班故障数', banks: '故障库', engine: '发动机', systems: '机载系统',
+      controls: '飞行操纵', environment: '环境', sensors: '传感器',
+      normal_hint: '不随机触发故障。机组难度仍然生效。',
+      custom_hint: '按预计飞行时间随机触发约定数量的故障。连锁反应可能增加故障；所选故障库仅限制随机触发。',
+      empty: '请至少选择一个故障库后继续。'
     },
     difficulty: {
       rookie: '菜鸟',

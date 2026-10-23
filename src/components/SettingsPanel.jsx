@@ -1,4 +1,6 @@
-import React from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
+import PropTypes from 'prop-types';
+import DisplaySettings from './DisplaySettings';
 
 const INTERVAL_OPTIONS = [1, 2, 5, 10, 15, 30];
 
@@ -18,67 +20,56 @@ const panelStyle = {
 };
 
 const SettingsPanel = ({ settings, settingsError, autoSaveStatus, onUpdateSettings, visualQuality = 'balanced', onUpdateVisualQuality, onClose }) => {
+  const { tx } = useLanguage();
   const lastSavedText = autoSaveStatus?.lastSavedAt
     ? new Date(autoSaveStatus.lastSavedAt).toLocaleTimeString()
-    : 'Not saved yet';
+    : tx("Not saved yet");
 
   return (
-    <div style={panelStyle}>
+    <div className="flight-settings-panel" style={panelStyle} aria-label={tx("Settings")}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid #333' }}>
-        <h3 style={{ margin: 0, fontSize: '16px' }}>Settings</h3>
-        <button className="close-btn" onClick={onClose}>×</button>
+        <h3 style={{ margin: 0, fontSize: '16px' }}>{tx("Settings")}</h3>
+        <button className="close-btn" aria-label={tx("Close settings")} onClick={onClose}>×</button>
       </div>
 
       <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <div>
-          <label htmlFor="outside-visual-quality" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>Outside Visual Quality</label>
-          <select
-            id="outside-visual-quality"
-            value={visualQuality}
-            onChange={(event) => onUpdateVisualQuality?.(event.target.value)}
-            style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#111827', color: '#f9fafb', border: '1px solid #374151' }}
-          >
-            <option value="balanced">Balanced (default)</option>
-            <option value="economy">Economy</option>
-          </select>
-          <div style={{ color: '#9ca3af', fontSize: '12px', marginTop: '5px' }}>
-            Economy lowers outside-view resolution and targets 30 fps. Balanced switches to Economy above 11,000 ft AGL and restores below 9,000 ft AGL.
-          </div>
-        </div>
+        <DisplaySettings visualQuality={visualQuality} onUpdateVisualQuality={onUpdateVisualQuality} />
 
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: '8px' }}>Cloud Auto-Save</div>
+        <fieldset disabled={!onUpdateSettings} style={{ border: 0, padding: 0, margin: 0 }}>
+          <div style={{ fontWeight: 600, marginBottom: '8px' }}>{tx("Cloud Auto-Save")}</div>
+          {!onUpdateSettings && <p>{tx('Cloud saves are unavailable in offline mode.')}</p>}
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
               type="checkbox"
               checked={Boolean(settings?.autoSaveEnabled)}
               onChange={(event) => onUpdateSettings?.({ autoSaveEnabled: event.target.checked })}
             />
-            <span>Enable auto-save for this account</span>
+            <span>{tx("Enable auto-save for this account")}</span>
           </label>
-        </div>
+        </fieldset>
 
         <div>
-          <div style={{ fontWeight: 600, marginBottom: '8px' }}>Save Interval</div>
+          <label htmlFor="auto-save-interval" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>{tx("Save Interval")}</label>
           <select
+            id="auto-save-interval"
             value={settings?.autoSaveIntervalMinutes ?? 5}
-            disabled={!settings?.autoSaveEnabled}
+            disabled={!onUpdateSettings || !settings?.autoSaveEnabled}
             onChange={(event) => onUpdateSettings?.({ autoSaveIntervalMinutes: Number(event.target.value) })}
             style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#111827', color: '#f9fafb', border: '1px solid #374151' }}
           >
             {INTERVAL_OPTIONS.map((minutes) => (
               <option key={minutes} value={minutes}>
-                Every {minutes} minute{minutes === 1 ? '' : 's'}
+                {tx('Every ${minutes} minutes', { minutes })}
               </option>
             ))}
           </select>
         </div>
 
         <div style={{ background: 'rgba(17, 24, 39, 0.85)', border: '1px solid #374151', borderRadius: '6px', padding: '10px 12px', fontSize: '13px' }}>
-          <div>Saving: {autoSaveStatus?.isSaving ? 'In progress' : 'Idle'}</div>
-          <div>Last save: {lastSavedText}</div>
-          {autoSaveStatus?.saveError && <div style={{ color: '#fca5a5', marginTop: '6px' }}>Error: {autoSaveStatus.saveError}</div>}
-          {settingsError && <div style={{ color: '#fcd34d', marginTop: '6px' }}>Settings: {settingsError}</div>}
+          <div>{tx("Saving:")}{autoSaveStatus?.isSaving ? tx("In progress") : tx("Idle")}</div>
+          <div>{tx("Last save:")}{lastSavedText}</div>
+          {autoSaveStatus?.saveError && <div style={{ color: '#fca5a5', marginTop: '6px' }}>{tx("Error:")}{autoSaveStatus.saveError}</div>}
+          {settingsError && <div style={{ color: '#fcd34d', marginTop: '6px' }}>{tx("Settings:")}{settingsError}</div>}
         </div>
       </div>
     </div>
@@ -86,3 +77,13 @@ const SettingsPanel = ({ settings, settingsError, autoSaveStatus, onUpdateSettin
 };
 
 export default SettingsPanel;
+
+SettingsPanel.propTypes = {
+  settings: PropTypes.object,
+  settingsError: PropTypes.string,
+  autoSaveStatus: PropTypes.object,
+  onUpdateSettings: PropTypes.func,
+  visualQuality: PropTypes.oneOf(['balanced', 'economy']),
+  onUpdateVisualQuality: PropTypes.func,
+  onClose: PropTypes.func
+};

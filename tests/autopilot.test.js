@@ -189,7 +189,10 @@ const buildPhysics = async ({ lat, lon, altitudeFt, heading, speedKts, runwayGeo
   physics.state.geo.lat = lat;
   physics.state.geo.lon = lon;
   physics.state.vel.set(speedKts * 0.514444, 0, 0);
-  if (runwayGeom) physics.setRunwayGeometry(runwayGeom);
+  if (runwayGeom) {
+    physics.setRunwayGeometry(runwayGeom);
+    physics.setApproachReference(runwayGeom);
+  }
   physics.setMotionEnabled(true);
   physics.testEnvProfile = envProfile?.name ?? 'standard';
   physics.testEnv = await applyEnvironment(physics, lat, lon, heading, envProfile?.overrides);
@@ -433,6 +436,7 @@ test('VNAV drives climb to altitude constraint in LNAV', async () => {
         leadBankDeg: 25
       });
       physics.setAutopilot(true, { mode: 'LNAV', speed: 220, altitude: 8000, heading: (geom.heading + 20) % 360 });
+      physics.setVNAVArmed(true);
       const durationSec = 6;
       const thresholds = { alt_err_ft: 300, vs_err_fpm: 200 };
       const errorsSamples = { alt_err_ft: [], vs_err_fpm: [] };
@@ -647,6 +651,12 @@ test('ILS approach commands descent and captures localizer', async () => {
       });
       physics.autopilot.setNavFrequency(geom.ilsFrequency);
       physics.setAutopilot(true, { mode: 'ILS', speed: 145, heading: geom.heading, vs: 0, altitude: 3000 });
+      if (geom.headingSource === 'designator-estimate') {
+        const state = physics.update({ throttle: 0.5, pitch: 0, roll: 0, yaw: 0, trim: 0, flaps: 1, gear: true }, SIM_DT);
+        assert.equal(state.autopilotDebug?.ils?.active, false, 'estimated runway labels must not provide a valid ILS signal');
+        assert.match(state.autopilotDebug?.ils?.message || '', /verified runway heading required/);
+        continue;
+      }
       const durationSec = 12;
       const thresholds = { loc_deg: 1.5, gs_deg: 1.5, cross_ft: 120, alt_err_ft: 60, heading_err_deg: 2, vs_err_fpm: 200 };
       const errorsSamples = { loc_deg: [], gs_deg: [], cross_ft: [], alt_err_ft: [], heading_err_deg: [], vs_err_fpm: [] };

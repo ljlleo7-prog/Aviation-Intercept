@@ -98,6 +98,31 @@
 }
 .mechanical-lever { width: 67px; position: relative; text-align: center; }
 .mechanical-lever.thrust { width: 45px; }
+.quadrant-assembly { flex-shrink: 0; }
+.engine-fuel-controls {
+  display: flex;
+  justify-content: center;
+  padding: 6px 73px 0;
+}
+.cockpit-controller .engine-fuel-lever {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 45px;
+  min-height: 44px;
+  padding: 2px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  letter-spacing: .2px;
+}
+.fuel-lever-track { position: relative; display: block; width: 6px; height: 18px; border-radius: 4px; background: #101916; box-shadow: 1px 0 0 #89917b; }
+.fuel-lever-grip { position: absolute; left: -6px; top: 8px; width: 18px; height: 10px; border: 1px solid #26362a; border-radius: 3px; background: linear-gradient(#ecebd7, #a3ad94 65%, #5c6a53); box-shadow: 1px 3px 2px #0009; transition: top .15s; }
+.run .fuel-lever-grip { top: 0; }
+.fuel-control-state { color: #e0bf87; font-size: 8px; }
+.run .fuel-control-state { color: #b8d5a0; }
+.engine-fuel-lever:disabled { opacity: .5; }
 .mechanical-lever strong { font-size: 8px; letter-spacing: .75px; display: block; height: 10px; }
 .lever-gate { position: relative; height: 142px; margin: 5px 0 0; touch-action: none; cursor: grab; }
 .lever-slot {
@@ -221,6 +246,8 @@
 .radio-panel label { display: flex; align-items: center; gap: 6px; }
 .radio-panel input { width: 65px; background: #0d1714; color: #d7dcb5; border: 1px solid #14231a; border-radius: 1px; box-shadow: inset 0 2px 3px #000b, 0 1px 0 #9da48b55; padding: 4px; font: 12px 'SFMono-Regular', Consolas, monospace; letter-spacing: .2px; }
 .radio-panel button { padding: 5px; font-size: 7px; }
+.nav-approach-reference { flex-basis: 100%; color: #f0edcf; font-size: 10px; line-height: 1.6; }
+.radio-panel [role="alert"] { color: #ffe4a1; }
 .cockpit-controller :focus-visible { outline: 2px solid #edcf77; outline-offset: 3px; }
 @media (max-width: 760px) {
   .cockpit-controller { flex-wrap: wrap; }

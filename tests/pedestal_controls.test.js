@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import EnginePhysicsService from '../src/services/EnginePhysicsService.js';
-import { commandedEngines, rotationDelta, spinTrim, thrustLeverCommand, thrustLeverPosition } from '../src/utils/pedestalControls.js';
+import { isReverseThrustCommand, commandedEngines, rotationDelta, spinTrim, thrustLeverCommand, thrustLeverPosition } from '../src/utils/pedestalControls.js';
 
 test('forward travel cannot command reverse until the reverse handle is selected', () => {
   assert.equal(thrustLeverCommand(-1, false), 0);
@@ -52,4 +52,12 @@ test('trim dragging crosses the angle wrap without a sudden full-turn jump', () 
   let trim = 0;
   for (const [previous, current] of [[0, 90], [90, 179], [179, -90], [-90, 0]]) trim = spinTrim(trim, rotationDelta(previous, current));
   assert.ok(Math.abs(trim * 0.2 - 0.01) < 1e-12);
+});
+
+
+test('forward idle clears reverse while reverse idle retains the selected reversers', () => {
+  assert.equal(isReverseThrustCommand(-0.7), true);
+  assert.equal(isReverseThrustCommand(thrustLeverCommand(0, true)), true);
+  assert.equal(isReverseThrustCommand(0), false);
+  assert.equal(isReverseThrustCommand(0.01), false);
 });

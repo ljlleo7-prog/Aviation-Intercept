@@ -1,161 +1,58 @@
 .homepage-container {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background: #0a0e27;
-    color: #e8f4f8;
-    font-family: 'Orbitron', sans-serif;
-    overflow: hidden;
-    position: relative;
+  min-height: 100svh;
+  box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 28px clamp(24px, 6vw, 90px) 22px;
+  color: #edf4fa;
+  background: #080f19;
+  font-family: 'Orbitron', sans-serif;
 }
-
-.homepage-container::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background:
-        linear-gradient(0deg, transparent 24%, rgba(0, 212, 255, 0.05) 25%, rgba(0, 212, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 212, 255, 0.05) 75%, rgba(0, 212, 255, 0.05) 76%, transparent 77%, transparent),
-        linear-gradient(90deg, transparent 24%, rgba(0, 212, 255, 0.05) 25%, rgba(0, 212, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 212, 255, 0.05) 75%, rgba(0, 212, 255, 0.05) 76%, transparent 77%, transparent);
-    background-size: 50px 50px;
-    z-index: 0;
-    pointer-events: none;
+.home-atmosphere { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: radial-gradient(ellipse at 50% 85%, #365665, #172937 28%, #080f19 70%); transition: transform 850ms cubic-bezier(.65,0,.25,1), filter 850ms; }
+.home-horizon { position: absolute; width: 150%; height: 70%; left: -25%; top: 67%; border-radius: 50%; border-top: 1px solid #e8c79899; background: radial-gradient(ellipse at 50% 0, #a6754940, #090f1b 55%); box-shadow: 0 -18px 90px #d6a27325; animation: home-horizon-rise 2s ease-out both; }
+.home-orbit { position: absolute; width: 85vw; height: 85vw; border: 1px solid #a5cfe31c; border-radius: 50%; top: 5%; left: 10%; animation: home-orbit-drift 24s ease-in-out infinite alternate; }
+.home-route { position: absolute; width: 85%; height: 28%; left: 8%; top: 50%; border-top: 1px dashed #a3c5d344; border-radius: 50%; transform: rotate(-24deg); }
+.home-route i { position: absolute; left: 48%; top: -4px; width: 6px; height: 6px; background: #ffe0ad; border-radius: 50%; box-shadow: 0 0 20px #ffe0ad; animation: home-beacon 4s ease-in-out infinite; }
+.homepage-content { flex: 1; width: 100%; max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 56px 0; text-align: center; transition: transform 750ms ease, opacity 500ms ease, filter 750ms ease; }
+.game-title { font-family: 'Orbitron', sans-serif; font-size: clamp(32px, 5.5vw, 78px); line-height: 1.15; letter-spacing: .2em; font-weight: 800; margin: 0; animation: home-copy-arrive 1.2s .1s both; }
+.game-title span { color: #d5b28a; }
+.game-subtitle { font-size: 12px; font-weight: 400; letter-spacing: .15em; font-family: 'Share Tech Mono', monospace; color: #b1c6d2; margin: 20px 0 38px; animation: home-copy-arrive 1.2s .2s both; }
+.menu-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: min(100%, 950px); }
+.menu-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; text-align: left; padding: 25px 22px; border: 1px solid #a6bfd02b; background: #0c182588; color: #eef5fa; cursor: pointer; transition: background 250ms, transform 250ms, border-color 250ms; animation: home-copy-arrive 900ms .35s both; }
+.menu-btn:nth-child(2) { grid-column: 2; grid-row: 2; }
+.menu-btn:nth-child(3) { animation-delay: .45s; }
+.menu-btn:nth-child(4) { animation-delay: .55s; }
+.menu-btn:nth-child(5) { grid-column: 1; grid-row: 2; animation-delay: .65s; }
+.menu-btn:nth-child(2), .menu-btn:nth-child(5) { padding: 16px 22px; }
+.menu-btn:hover:not(:disabled) { background: #8cafc51f; transform: translateY(-4px); border-color: #d5b28a88; }
+.menu-btn:focus-visible { outline: 2px solid #e5c499; outline-offset: 4px; }
+.menu-btn.disabled { opacity: .4; cursor: default; }
+.btn-icon { color: #c7a886; font-size: 11px; }
+.btn-text { font-family: 'Orbitron', sans-serif; font-size: 14px; letter-spacing: .04em; }
+.btn-desc { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: #9eb2c0; line-height: 1.6; }
+.homepage-footer { text-align: center; font-size: 10px; letter-spacing: .08em; color: #9bafbd; }
+.home-entry-status { position: absolute; left: 20px; right: 20px; top: 50%; text-align: center; color: #e5d0b3; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; }
+.homepage-departing .homepage-content { opacity: 0; transform: scale(1.06) translateY(-18px); filter: blur(8px); pointer-events: none; }
+.homepage-departing .home-atmosphere { transform: scale(1.55) translateY(-8%); filter: brightness(1.6); }
+.homepage-departing .home-entry-status { animation: home-status-arrive 850ms both; }
+@keyframes home-copy-arrive { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes home-horizon-rise { from { opacity: 0; transform: translateY(80px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes home-orbit-drift { to { transform: translate(3%, -3%) rotate(8deg); } }
+@keyframes home-beacon { 50% { opacity: .4; transform: translateX(28px); } }
+@keyframes home-status-arrive { 35% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
+@media (max-width: 700px) {
+  .homepage-container { padding: 24px; }
+  .homepage-content { padding: 48px 0 36px; }
+  .game-title span { display: block; }
+  .game-title { font-size: clamp(36px, 10vw, 64px); }
+  .menu-options { grid-template-columns: 1fr; max-width: 420px; }
+  .menu-btn:nth-child(n) { grid-column: auto; grid-row: auto; padding: 18px; }
+  .menu-btn:nth-child(2) { order: 5; }
+  .btn-icon { display: none; }
 }
-
-.homepage-container::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background: linear-gradient(transparent, #00ffff, transparent);
-    animation: scanline 8s linear infinite;
-    pointer-events: none;
-    z-index: 9999;
-    opacity: 0.3;
-}
-
-@keyframes scanline {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(100vh); }
-}
-
-.homepage-content {
-    text-align: center;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.game-title {
-    font-size: 4.2rem;
-    font-weight: 900;
-    margin-bottom: 0.25rem;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    color: #00ffff;
-    text-shadow: 0 0 20px #00ffff, 0 0 40px #00d4ff, 0 0 60px #00d4ff;
-    animation: titlePulse 3s ease-in-out infinite;
-}
-
-@keyframes titlePulse {
-    0%, 100% { text-shadow: 0 0 20px #00ffff, 0 0 40px #00d4ff; }
-    50% { text-shadow: 0 0 30px #00ffff, 0 0 60px #00d4ff, 0 0 80px #00d4ff; }
-}
-
-.game-subtitle {
-    font-size: 1.2rem;
-    font-weight: 400;
-    margin-bottom: 1.75rem;
-    letter-spacing: 0.15em;
-    color: #8fa3b0;
-    font-family: 'Share Tech Mono', monospace;
-}
-
-.menu-options {
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-    width: 300px;
-    margin: 0 auto;
-}
-
-.menu-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 1rem 1.1rem;
-    background: rgba(20, 27, 61, 0.7);
-    border: 1px solid rgba(0, 212, 255, 0.3);
-    color: #e8f4f8;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-align: left;
-    backdrop-filter: blur(10px);
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-    position: relative;
-    overflow: hidden;
-}
-
-.menu-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.1), transparent);
-    transition: left 0.5s;
-}
-
-.menu-btn:hover:not(.disabled)::before {
-    left: 100%;
-}
-
-.menu-btn:hover:not(.disabled) {
-    background: rgba(20, 27, 61, 0.9);
-    border-color: #00ffff;
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-    transform: translateX(10px);
-}
-
-.menu-btn.disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    filter: grayscale(1);
-}
-
-.btn-icon {
-    font-size: 1.2rem;
-    margin-bottom: 0.2rem;
-}
-
-.btn-text {
-    font-size: 1rem;
-    font-weight: 700;
-    margin-bottom: 0.1rem;
-    color: #00d4ff;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-}
-
-.btn-desc {
-    font-size: 0.68rem;
-    color: #8fa3b0;
-    font-family: 'Share Tech Mono', monospace;
-}
-
-.homepage-footer {
-    position: absolute;
-    bottom: 2rem;
-    font-size: 0.8rem;
-    opacity: 0.5;
+@media (prefers-reduced-motion: reduce) {
+  .homepage-container * { animation: none !important; transition: none !important; }
 }

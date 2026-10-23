@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
 import { resolveICAO } from '../data/aircraft/index.js';
 
 // Fallback panel (used when aircraft panel not found)
 import DefaultPanel from '../data/aircraft/b738/eicasPanel.jsx';
 
-const CentralPanel = ({ flightState, aircraftModel, efisFontFamily, onToggleSystems, onToggleBreakers }) => {
-  const { t } = useLanguage();
+const CentralPanel = ({ flightState, aircraftModel, efisFontFamily, onToggleBreakers }) => {
   const [Panel, setPanel] = useState(() => DefaultPanel);
 
   useEffect(() => {
@@ -22,7 +20,6 @@ const CentralPanel = ({ flightState, aircraftModel, efisFontFamily, onToggleSyst
     <div className="central-panel" style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', fontFamily: efisFontFamily || 'monospace' }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px' }}>
         <button onClick={onToggleBreakers} style={{ background: '#ffaa00', border: 'none', borderRadius: '4px', color: '#000', padding: '3px 7px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>CB</button>
-        <button onClick={onToggleSystems} style={{ background: '#4a90e2', border: 'none', borderRadius: '4px', color: '#fff', padding: '3px 7px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>{t('ui.systems.overhead_panel_short')}</button>
       </div>
       <Panel flightState={flightState} efisFontFamily={efisFontFamily} />
     </div>

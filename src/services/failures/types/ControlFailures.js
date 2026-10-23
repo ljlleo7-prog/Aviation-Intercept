@@ -13,7 +13,7 @@ const ControlFailures = {
                 }),
                 effect: (sys, intensity, ctx) => {
                     if (!ctx.surface) ctx.surface = 'elevator';
-                    if (ctx.stuckValue === undefined) ctx.stuckValue = 0;
+                    if (ctx.stuckValue === undefined) ctx.stuckValue = sys.controls[ctx.surface];
                     sys.controls[ctx.surface] = ctx.stuckValue;
                 }
             }

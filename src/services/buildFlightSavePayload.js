@@ -10,16 +10,17 @@ export function buildFlightSavePayload({
     ? physicsService.getSerializableState()
     : physicsState;
 
-  return {
-    version: '1.0',
+  return JSON.parse(JSON.stringify({
+    version: '1.1',
     timestamp: Date.now(),
+    session: physicsService?.sessionContext || null,
     flightData,
     physicsState: serializablePhysicsState,
     runwayGeometry: flightData?.runwayGeometry || physicsService?.runwayGeometry || null,
     flightPlan,
     weatherData,
     aircraftModel
-  };
+  }));
 }
 
 export default buildFlightSavePayload;

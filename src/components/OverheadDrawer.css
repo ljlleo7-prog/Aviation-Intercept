@@ -1,0 +1,16 @@
+.overhead-drawer{position:fixed;inset:0;z-index:2200;pointer-events:none}
+.overhead-pull-handle,.overhead-push-handle{pointer-events:auto;touch-action:none;user-select:none;cursor:ns-resize;display:flex;align-items:center;justify-content:center;gap:10px;color:#d6dedf;background:#1c252bf2;border:1px solid #5c6b73;font:10px monospace;letter-spacing:.1em}
+.overhead-pull-handle{position:absolute;top:0;left:50%;transform:translateX(-50%);height:26px;min-width:180px;border-top:0;border-radius:0 0 8px 8px;z-index:2}
+.overhead-grip{width:28px;height:4px;border-radius:3px;background:#8c9aa1;box-shadow:0 2px 0 #10171b}
+.overhead-drawer-backdrop{position:absolute;inset:0;background:#0009;pointer-events:auto}
+.overhead-drawer-sheet{position:absolute;top:0;left:50%;margin-left:max(-48vw,-620px);width:min(96vw,1240px);max-height:100dvh;pointer-events:auto;transition:transform .2s ease-out;will-change:transform;outline:none}
+.overhead-drawer-content{outline:none;display:flex;flex-direction:column;max-height:100dvh}
+.overhead-drawer.is-dragging .overhead-drawer-sheet{transition:none}
+.overhead-drawer.is-dragging:not(.is-open) .overhead-drawer-backdrop{pointer-events:none;background:#0003}
+.overhead-drawer .overhead-overlay{position:static;width:100%;height:auto;background:none;display:block;z-index:auto}
+.overhead-drawer .overhead-container{width:100%;height:min(89dvh,1080px);max-height:calc(100dvh - 38px);box-sizing:border-box;border-radius:0 0 8px 8px}
+.overhead-push-handle{align-self:center;min-height:34px;min-width:260px;border-radius:0 0 10px 10px;padding:6px 16px}
+.overhead-pull-handle:focus-visible,.overhead-push-handle:focus-visible{outline:2px solid #e8c68d;outline-offset:-3px}
+@media(prefers-reduced-motion:reduce){.overhead-drawer-sheet{transition:none}}
+
+.overhead-pull-handle[hidden]{display:none}

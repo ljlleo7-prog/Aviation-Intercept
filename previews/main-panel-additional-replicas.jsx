@@ -1,4 +1,5 @@
 /* eslint-disable react/prop-types */
+import ReplicaAlertMessages from '../src/components/ReplicaAlertMessages.jsx';
 import { Label, Plate, Knob, Push, Dial, Screw, useInstrumentData } from './main-panel-parts.jsx';
 
 const seq = n => Array.from({ length:n }, (_,i) => i);
@@ -16,8 +17,8 @@ function EnginePage({ parts, count=4, tall=false }) {
       {!tall && <><Label x={x} y="71" className="green tiny">{Number(d.engineN2?.[i] ?? 62.8).toFixed(1)}</Label><Label x={x} y="81" className="green tiny">{Number(d.engineFuelFlow?.[i] ?? .6).toFixed(1)}</Label></>}
     </g>)}
     <path d={`M0 ${tall?67:88}h120`} stroke="#b4c5b4" strokeWidth=".5"/>
-    <text x="3" y={tall?76:96} className="green tiny">SEAT BELTS</text><text x="3" y={tall?83:104} className="green tiny">NO PORTABLE DEVICES</text><text x="3" y={tall?90:112} className="green tiny">PARK BRK</text>
-    <text x="84" y={tall?76:96} className="green tiny">APU AVAIL</text>
+    <ReplicaAlertMessages warnings={d.warnings} y={tall?76:96} rows={tall?5:3}/>
+
   </g>;
 }
 
@@ -66,6 +67,7 @@ function WingControls({ x, right=false }) {
 }
 
 function Panel350({ parts }) {
+  const data = useInstrumentData();
   const { Display, Gear, GaugeFace }=parts;
   return <>
     <path d="M64 70V43h314l26-25h392l26 25h314v27l51 54v135H13V124z" fill="url(#metal)" stroke="#304650" strokeWidth="2"/>
@@ -76,7 +78,8 @@ function Panel350({ parts }) {
     <ModernFlight parts={parts} x={270} y={95} w={190} h={154}/>
     <Display x={498} y={95} w={202} h={154} viewWidth={184} viewHeight={136} label="a350-engine-warning-display">
       <svg width="92" height="136" viewBox="0 0 120 160" overflow="hidden"><Label x="60" y="8" className="green tiny">CLB  92.4%</Label>{[26,77].map(x=><g key={x}><GaugeFace cx={x} cy={30} r={16} value="22.1" green/><GaugeFace cx={x} cy={65} r={14} value="416" green/>{['N2 62.8','FF 0.6','OIL 92'].map((t,i)=><Label key={t} x={x} y={95+i*20} className="green tiny">{t}</Label>)}</g>)}</svg>
-      <path d="M94 0v136M94 38h90" stroke="#9ba99a" strokeWidth=".5"/><Label x="139" y="13" className="tiny">WARNING / MEMO</Label><text x="99" y="48" className="green tiny">SEAT BELTS</text><text x="99" y="57" className="green tiny">PARK BRK</text><text x="99" y="66" className="green tiny">APU AVAIL</text>
+      <path d="M94 0v136M94 38h90" stroke="#9ba99a" strokeWidth=".5"/><Label x="139" y="13" className="tiny">WARNING / MEMO</Label><ReplicaAlertMessages warnings={data.warnings} x={99} y={48} width={80} rows={9}/>
+
     </Display>
     <ModernFlight parts={parts} x={739} y={95} w={190} h={154} reverse/>
     <Display x={944} y={95} w={191} h={154} label="first-officer-ois"><InformationPage parts={parts}/></Display>
@@ -128,7 +131,7 @@ function BoeingEnginePage({ parts }) {
   const { GaugeFace }=parts;
   return <g data-component="777-engine-warning-page"><Label x="42" y="8" className="green tiny">{d.flightPhase || 'CLB'} LIVE</Label>{[22,53].map((x,i)=><g key={x}><GaugeFace cx={x} cy={28} r={12} value={Number(d.engineN1?.[i] ?? 22.1).toFixed(1)}/><GaugeFace cx={x} cy={62} r={11} value={Math.round(d.engineEGT?.[i] ?? 416)}/></g>)}
     <Label x="37" y="89" className="green tiny">N2 {Number(d.engineN2?.[0] ?? 62.8).toFixed(1)} / {Number(d.engineN2?.[1] ?? 62.8).toFixed(1)}</Label><Label x="38" y="101" className="green tiny">FF {Number(d.engineFuelFlow?.[0] ?? .6).toFixed(1)} / {Number(d.engineFuelFlow?.[1] ?? .6).toFixed(1)}</Label>
-    <text x="79" y="18" className="tiny">STATUS</text><Label x="92" y="79" className="green tiny">FLAPS {Math.round(d.flaps ?? 0)}</Label><path d="M87 85v23m10-23v23m-12-12h14" stroke="#b7cbb2" strokeWidth=".8"/><Label x="40" y="117" className="green tiny">FUEL {Math.round(d.fuel ?? 18600)}</Label>
+    <ReplicaAlertMessages warnings={d.warnings} x={76} y={18} width={41} rows={6}/><Label x="92" y="79" className="green tiny">FLAPS {Math.round(d.flaps ?? 0)}</Label><path d="M87 85v23m10-23v23m-12-12h14" stroke="#b7cbb2" strokeWidth=".8"/><Label x="40" y="117" className="green tiny">FUEL {Math.round(d.fuel ?? 18600)}</Label>
   </g>;
 }
 

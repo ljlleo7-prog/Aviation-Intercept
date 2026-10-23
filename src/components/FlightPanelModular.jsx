@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // Import modular components
 import CrashWarningFlash from './CrashWarningFlash';
@@ -8,7 +8,7 @@ import NavigationPanel from './NavigationPanel';
 import BoeingRadar from './radar/BoeingRadar';
 import AirbusRadar from './radar/AirbusRadar';
 import CentralPanel from './CentralPanel';
-import OverheadPanel from './OverheadPanel';
+import OverheadDrawer from './OverheadDrawer.jsx';
 import Sidebar from './Sidebar';
 import SaveLoadPanel from './SaveLoadPanel';
 import TimerPanel from './TimerPanel';
@@ -17,13 +17,15 @@ import ChecklistPanel from './ChecklistPanel';
 import SystemStatusPanel from './SystemStatusPanel';
 import CircuitBreakerPanel from './CircuitBreakerPanel';
 import SensoryFeedback from './SensoryFeedback';
+import CockpitSmoke from './CockpitSmoke.jsx';
 import SettingsPanel from './SettingsPanel';
 import CenterControlPedestal from './CenterControlPedestal.jsx';
 import AircraftMainPanelReplica from './AircraftMainPanelReplica.jsx';
 import { useLanguage } from '../contexts/LanguageContext';
 import './FlightPanel.css';
+import { cockpitVisualState, daylightFactor, parseZuluTime } from '../utils/cockpitVisualState.js';
 
-const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherData, onActionRequest, aircraftModel, aircraftData, selectedArrival, flightPlan, radioMessages, onRadioFreqChange, npcs, frequencyContext, currentRegion, timeScale, setTimeScale, onUpdateFlightPlan, availableRunways, startupStatus, playerSettings, playerSettingsError, autoSaveStatus, onUpdatePlayerSettings, visualQuality, onUpdateVisualQuality, ilsRunwayOptions = [] }) => {
+const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherData, onActionRequest, aircraftModel, aircraftData, selectedArrival, flightPlan, radioMessages, onRadioFreqChange, npcs, frequencyContext, currentRegion, timeZulu, timeScale, setTimeScale, onUpdateFlightPlan, availableRunways, startupStatus, playerSettings, playerSettingsError, autoSaveStatus, onUpdatePlayerSettings, visualQuality, onUpdateVisualQuality, ilsRunwayOptions = [] }) => {
   const { t } = useLanguage();
   const isAirbus = ((aircraftModel || '').toLowerCase().includes('a3') || (aircraftModel || '').toLowerCase().includes('airbus'));
   const efisFontClass = isAirbus ? 'efis-font-airbus' : 'efis-font-boeing';
@@ -86,7 +88,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     autopilotMode: flightData?.autopilot?.mode ?? flightData?.autopilotMode ?? 'HDG',
     vnavArmed: flightData?.autopilot?.vnavArmed ?? false,
     autothrottleArmed: flightData?.autopilot?.autothrottleArmed ?? true,
-    flightDirector: true,
+    flightDirector: { enabled: false },
     altitudeHold: true,
     headingHold: true,
     autopilotTargets: {
@@ -158,6 +160,8 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
             : (Array.isArray(flightData.engineParams?.fuelFlow) ? flightData.engineParams.fuelFlow : (prevState.engineFuelFlow || [0, 0])),
           fuel: flightData.fuel ?? prevState.fuel,
           throttle: typeof flightData.controls?.throttle === 'number' ? flightData.controls.throttle : prevState.throttle,
+          throttleCommand: flightData.throttleCommand,
+          engineThrottleCommands: flightData.engineThrottleCommands,
           engineThrottles: Array.isArray(flightData.engineThrottles)
             ? flightData.engineThrottles
             : (Array.isArray(flightData.controls?.throttles) ? flightData.controls.throttles : prevState.engineThrottles),
@@ -171,6 +175,8 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
           circuitBreakers: prevState.circuitBreakers,
           alarms: flightData.alarms ?? prevState.alarms,
           activeWarnings: flightData.activeWarnings ?? [],
+          alertState: flightData.alertState,
+          crashWarning: flightData.crashWarning,
 
           // Scene State
           physicsActive: flightData.physicsActive,
@@ -180,6 +186,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
           flightPhase: flightData.phaseName || prevState.flightPhase,
 
           controls: flightData.controls ?? prevState.controls ?? {},
+          controlFeedback: flightData.controlFeedback ?? prevState.controlFeedback,
           onGround: flightData.onGround ?? flightData.debugPhysics?.isOnGround ?? false,
 
           // Surface controls
@@ -198,7 +205,10 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
           autothrottleArmed: flightData.autopilot?.autothrottleArmed ?? prevState.autothrottleArmed,
           autopilotDebug: flightData.autopilotDebug ?? {},
           approachTelemetry: flightData.approachTelemetry ?? null,
-          flightDirector: prevState.flightDirector,
+          flightDirector: flightData.autopilot?.flightDirector ?? { enabled: false },
+          couplingMode: flightData.autopilot?.couplingMode ?? 'CMD',
+          approachReference: flightData.autopilot?.approachReference ?? null,
+          nav1Frequency: flightData.autopilot?.nav1Frequency ?? 0,
           altitudeHold: prevState.altitudeHold,
           headingHold: prevState.headingHold,
           autopilotTargets: flightData.autopilotTargets ?? prevState.autopilotTargets,
@@ -218,43 +228,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     }
   }, [flightData, weatherData]);
   
-  const [flashActive, setFlashActive] = useState(false);
-  const [flashText, setFlashText] = useState('');
   const [showCrashPanel, setShowCrashPanel] = useState(false);
-  const [lastAlertTime, setLastAlertTime] = useState(0);
-  const alertCooldown = 3000;
-
-  // Handle crash warnings and alerts
-  useEffect(() => {
-    let warningMsg = null;
-    
-    // Priority 1: Crash
-    if (flightData?.crashWarning) {
-        warningMsg = flightData.crashWarning;
-    } 
-    // Priority 2: Flashing Warnings (Re-enabled for critical incidents)
-    else if (flightData?.activeWarnings) {
-        const flashWarning = flightData.activeWarnings.find(w => w.isFlashing);
-        if (flashWarning) {
-            warningMsg = flashWarning.message;
-        }
-    }
-
-    if (!warningMsg) {
-      return;
-    }
-    const now = Date.now();
-    if (now - lastAlertTime < alertCooldown) {
-      return;
-    }
-    setFlashText(warningMsg);
-    setFlashActive(true);
-  }, [flightData?.crashWarning, flightData?.activeWarnings, lastAlertTime]);
-
-  const handleAlertComplete = useCallback(() => {
-    setFlashActive(false);
-    setLastAlertTime(Date.now());
-  }, []);
 
   useEffect(() => {
     if (flightData?.hasCrashed) {
@@ -302,7 +276,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     // Show this mode if physics is off OR if we are in a narrative-heavy phase (like Boarding)
     const isNarrativePhase = ['BOARDING', 'DEPARTURE_CLEARANCE'].includes(flightState.flightPhase);
     
-    if (!flightState.physicsActive && !showOverhead) {
+    if (!flightState.physicsActive) {
       return React.createElement('div', { 
         className: 'immersive-mode',
         style: {
@@ -451,7 +425,6 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
           flightState,
           aircraftModel,
           efisFontFamily,
-          onToggleSystems: () => setShowOverhead(prev => !prev),
           onToggleBreakers: () => setShowCircuitBreakers(prev => !prev)
         })
       ),
@@ -466,8 +439,20 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     );
   };
 
-  return React.createElement('div', { className: 'modern-flight-panel', style: { userSelect: 'none', display: 'flex', flexDirection: 'row', gap: '10px', padding: 0 } },
+  const visual = cockpitVisualState(flightState.systems, weatherData);
+  const daylight = daylightFactor(parseZuluTime(timeZulu, weatherData?.zuluTime), flightState.latitude || 0, flightState.longitude || 0);
+  const surroundLight = (1 - daylight) * (visual.dome ? .4 : visual.background ? .22 : 0);
+  const panelSpill = (1 - daylight) * (visual.flood ? 1 : visual.panel ? .85 : visual.dome ? .55 : visual.background ? .3 : .08);
+  return React.createElement('div', { className: `modern-flight-panel ${visual.displaysPowered ? '' : 'cockpit-no-power'}`, style: { '--panel-surround-light': surroundLight, '--panel-spill': panelSpill, background: daylight < .3 ? '#060b12' : undefined, userSelect: 'none', display: 'flex', flexDirection: 'row', gap: '10px', padding: 0 } },
     
+    React.createElement(OverheadDrawer, {
+      open: showOverhead,
+      onOpenChange: setShowOverhead,
+      flightState,
+      onSystemAction: handleSystemAction,
+      aircraftModel
+    }),
+
     // Sidebar (Leftmost)
     React.createElement(Sidebar, { activePanel: activeSidebarPanel, onTogglePanel: handleSidebarToggle }),
 
@@ -478,7 +463,10 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
       onUpdateFlightPlan: onUpdateFlightPlan,
       weatherData: weatherData,
       aircraftModel: aircraftModel,
-      aircraftData: aircraftData
+      aircraftData: aircraftData,
+      flightState,
+      selectedArrival,
+      onActionRequest
     }),
 
     // Timer Panel Overlay
@@ -566,15 +554,6 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     // Main Content Area (Wrapped in a div to take remaining width)
     React.createElement('div', { style: { flex: 1, position: 'relative', padding: '20px' } },
 
-      // Overhead Panel Overlay
-      showOverhead && React.createElement(OverheadPanel, {
-        onClose: () => setShowOverhead(false),
-        flightState,
-        onSystemAction: handleSystemAction,
-        aircraftModel: aircraftModel,
-        aircraftData: aircraftData
-      }),
-
       // Circuit Breaker Panel Overlay
       showCircuitBreakers && React.createElement(CircuitBreakerPanel, {
         onClose: () => setShowCircuitBreakers(false)
@@ -582,9 +561,10 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
       
       // Sensory Feedback Overlay (Always active for effects)
       React.createElement(SensoryFeedback),
+      React.createElement(CockpitSmoke, { density: flightState.systems?.cockpitSmoke?.density || 0 }),
 
       // Crash warning flash
-      React.createElement(CrashWarningFlash, { flashActive, flashText, onAlertComplete: handleAlertComplete }),
+      React.createElement(CrashWarningFlash, { warnings: flightData?.alertState?.visualWarnings ?? flightData?.activeWarnings, crashWarning: flightData?.crashWarning }),
       
       // Crash panel (if crashed)
       React.createElement(CrashPanel, { showCrashPanel, resetFlight }),

@@ -93,6 +93,10 @@ class FailureGraphExecutor {
                 continue;
             }
 
+            const triggered = triggerFailure(pending.edge.targetRuntimeId, pending.context);
+            this.pendingActivations.delete(key);
+            if (triggered === false) continue;
+
             if (typeof this.hooks.onCascadeTriggered === 'function') {
                 this.hooks.onCascadeTriggered({
                     edge: pending.edge,
@@ -104,8 +108,6 @@ class FailureGraphExecutor {
                 });
             }
 
-            triggerFailure(pending.edge.targetRuntimeId, pending.context);
-            this.pendingActivations.delete(key);
         }
     }
 
@@ -128,7 +130,7 @@ class FailureGraphExecutor {
                 : {};
             const edgeDifficulty = resolveEdgeDifficulty(edge, cascadePolicy);
             if (edgeDifficulty.blocked) return;
-            if (Math.random() > edgeDifficulty.effectiveProbability) return;
+            if (edgeDifficulty.effectiveProbability <= 0 || Math.random() > edgeDifficulty.effectiveProbability) return;
 
             const pending = {
                 edge,
@@ -214,6 +216,7 @@ class FailureGraphExecutor {
             context[key] = value;
         });
 
+        context.source = sourceFailure?.variation?.context?.source;
         context.triggeredBy = edge.sourceRuntimeId;
         context.propagationType = edge.propagationType;
         context.cascadeEdgeId = edge.id;

@@ -488,6 +488,7 @@ test('ILS exposes debug info and reduces localizer deviation during intercept', 
     thresholdStart: { latitude: 34.0, longitude: -118.01, elevation: 100 }
   });
   physics.autopilot.setNavFrequency(110.3);
+  physics.setApproachReference(physics.runwayGeometry);
   physics.setAutopilot(true, { mode: 'ILS', speed: 160, heading: 90, vs: -700, altitude: 2500 });
 
   let initialDev = null;

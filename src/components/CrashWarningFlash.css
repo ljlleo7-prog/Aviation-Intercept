@@ -1,0 +1,23 @@
+.flight-visual-alerts {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(480px, 85vw);
+  max-height: 25vh;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  text-align: center;
+  font: bold clamp(16px, 2vw, 28px) monospace;
+  color: #ff5454;
+  background: rgba(10, 10, 10, .92);
+  border: 2px solid #ff5454;
+  padding: 6px 16px;
+}
+.flight-alert-primary { animation: flight-alert-attention 1s ease-in-out infinite; }
+.flight-alert-secondary { font-size: .65em; margin-top: 4px; }
+@keyframes flight-alert-attention { 50% { color: #fff; } }
+@media (prefers-reduced-motion: reduce) { .flight-alert-primary { animation: none; } }

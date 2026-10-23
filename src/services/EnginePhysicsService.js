@@ -48,7 +48,8 @@ class EnginePhysicsService {
             pneumaticPressure: false,
             fuelAvailable: false,
             ignition: false,
-            egtOffset: 0, // External offset for failures/fires
+            fireHeatInput: 0,
+            egtOffset: 0, // Heat input from non-fire thermal faults
             emergencyBoostAllowed: false
         };
         
@@ -97,6 +98,7 @@ class EnginePhysicsService {
     update(dt, throttleInput, mach, altitude, airDensityRatio, ambientTemp) {
         if (this.state.failed) {
             this.spoolDown(dt);
+            this.updateTemperature(dt, ambientTemp);
             return this.getOutput();
         }
 
@@ -284,18 +286,7 @@ class EnginePhysicsService {
         this.state.fuelFlow = Math.max(idleFlow, smoothed);
         this._prevFuelFlow = this.state.fuelFlow;
 
-        // EGT — thermal model: heat inflow from combustion, natural cooling toward ambient
-        const ambT = Number.isFinite(ambientTemp)
-            ? (ambientTemp > 150 ? ambientTemp - 273.15 : ambientTemp)
-            : 15;
-        const targetRunningEGT = ambT + Math.pow(this.state.n2 / 100, 0.8) * 800;
-        const heatInflow = this.state.running
-            ? (targetRunningEGT - this.state.egt) * 2.5 * dt
-            : 0;
-        const cooling = (this.state.egt - ambT) * (1 / 30) * dt;
-        this.state.egt += heatInflow - cooling + (this.state.egtOffset || 0) * dt;
-        if (this.state.egt < ambT) this.state.egt = ambT;
-        if (this.state.egt > 1400) this.state.egt = 1400; // physical ceiling
+        this.updateTemperature(dt, ambientTemp);
 
         // Accumulate EGT offset from failure — logarithmic rise (fast spike, slow sustained heat)
         if (this.failureParams.egt_rate !== 0) {
@@ -332,6 +323,20 @@ class EnginePhysicsService {
         const idleRatio = Math.max(0.15, Math.min(0.4, n1 / this.config.maxN1));
         const c_idle = 0.7;
         return c_idle * tsfc0 * this.config.maxThrust * Math.pow(idleRatio, 1.8) * Math.max(0.5, densityRatio);
+    }
+
+    updateTemperature(dt, ambientTemp) {
+        const ambient = Number.isFinite(ambientTemp)
+            ? (ambientTemp > 150 ? ambientTemp - 273.15 : ambientTemp) : 15;
+        const combustion = this.state.running ? 2.5 : 0;
+        const cooling = 1 / 30;
+        const target = ambient + Math.pow(Math.max(0, this.state.n2) / 100, .8) * 800;
+        const heat = (this.state.egtOffset || 0) + (this.state.fireHeatInput || 0);
+        const rate = combustion + cooling;
+        const equilibrium = (combustion * target + cooling * ambient + heat) / rate;
+        // Analytic integration keeps cooling stable across physics substeps.
+        this.state.egt = Math.max(ambient, Math.min(1400,
+            equilibrium + (this.state.egt - equilibrium) * Math.exp(-rate * Math.max(0, dt))));
     }
 
     spoolDown(dt) {

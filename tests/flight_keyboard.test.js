@@ -44,8 +44,8 @@ test('held directions combine, cancel opposites, and release independently', () 
   assert.equal(values.yaw, -1);
   key('KeyS'); advance(2000); assert.equal(values.pitch, 0);
   key('KeyW', 'keyup'); advance(2000); assert.equal(values.pitch, 0.3);
-  key('KeyD', 'keyup'); assert.equal(values.roll, 0.3);
-  advance(100); assert.ok(values.roll > 0 && values.roll < 0.3);
+  key('KeyD', 'keyup'); assert.equal(values.roll, 0);
+  advance(100); assert.equal(values.roll, 0);
   advance(2000); assert.equal(values.roll, 0);
   detach(); assert.equal(values.pitch, 0); assert.equal(values.yaw, 0);
 });
@@ -60,13 +60,13 @@ test('brakes release on blur and hidden document', () => {
 });
 
 test('toggles ignore repeats and flap detents respect boundaries', () => {
-  const { key, state, values, calls } = setup();
+  const { key, state, values, calls, advance } = setup();
   key('KeyG'); assert.equal(values.gear, false);
   key('KeyG', 'keydown', { repeat: true }); assert.equal(calls.length, 1);
   key('KeyF'); assert.equal(values.flaps, 1);
   key('KeyF', 'keydown', { shiftKey: true }); assert.equal(values.flaps, 0);
   state.flaps = 3; key('KeyF'); assert.equal(values.flaps, 3);
-  key('Equal'); assert.equal(values.throttle, 0.55);
+  key('Equal'); advance(200); assert.ok(Math.abs(values.throttle - 0.55) < 1e-9);
   key('KeyP'); assert.equal(values.parkingBrake, true);
 });
 
@@ -118,11 +118,10 @@ test('S pulls and W pushes with frame-rate-independent easing and safe focus res
   key('KeyS');
   advance(100);
   assert.ok(values.pitch > 0 && values.pitch < 0.3);
-  const partial = values.pitch;
   key('KeyS', 'keyup');
-  assert.equal(values.pitch, partial);
+  assert.equal(values.pitch, 0);
   advance(100);
-  assert.ok(values.pitch > 0 && values.pitch < partial);
+  assert.equal(values.pitch, 0);
   key('KeyW');
   advance(500);
   assert.ok(values.pitch < 0 && values.pitch > -0.3);
@@ -130,4 +129,44 @@ test('S pulls and W pushes with frame-rate-independent easing and safe focus res
   assert.equal(values.pitch, 0);
   advance(1000);
   assert.equal(values.pitch, 0);
+});
+
+
+test('held throttle is continuous, cancels opposites, clamps and stops on release or blur', () => {
+  const { key, values, state, advance, target } = setup();
+  key('Equal'); advance(1000); assert.ok(Math.abs(values.throttle - 0.75) < 1e-9);
+  key('Equal', 'keydown', { repeat: true }); advance(1100); assert.equal(values.throttle, 1);
+  key('Minus'); advance(500); assert.equal(values.throttle, 1);
+  key('Equal', 'keyup'); advance(1000); assert.ok(Math.abs(values.throttle - 0.75) < 1e-9);
+  key('Minus', 'keyup'); const stopped = values.throttle;
+  advance(1000); assert.equal(values.throttle, stopped);
+  state.throttle = 0.1; key('Minus'); advance(1000); assert.equal(values.throttle, 0);
+  target.dispatchEvent(new Event('blur')); advance(1000); assert.equal(values.throttle, 0);
+});
+
+test('reverse thrust requires Shift+R and airbrake detents use L/Shift+L', () => {
+  const { key, state, values, calls } = setup();
+  key('KeyR'); assert.equal(calls.length, 0);
+  key('KeyR', 'keydown', { shiftKey: true }); assert.equal(values.throttle, -0.7);
+  key('KeyR', 'keydown', { shiftKey: true, repeat: true }); assert.equal(calls.length, 1);
+  state.throttle = -0.7;
+  key('KeyR', 'keydown', { shiftKey: true }); assert.equal(values.throttle, 0);
+  state.airBrakes = 0; state.maxAirBrakes = 3;
+  key('KeyL'); assert.equal(values.airBrakes, 1);
+  key('KeyL', 'keydown', { shiftKey: true }); assert.equal(values.airBrakes, 0);
+  state.airBrakes = 3; key('KeyL'); assert.equal(values.airBrakes, 3);
+});
+
+
+test('Shift+R exits reverse even after holding minus to reverse idle', () => {
+  const { key, state, values, advance } = setup();
+  state.throttle = -0.7;
+  key('Minus'); advance(4000); key('Minus', 'keyup');
+  assert.ok(Object.is(values.throttle, -0));
+  state.throttle = values.throttle;
+  key('KeyR', 'keydown', { shiftKey: true });
+  assert.ok(Object.is(values.throttle, 0));
+  state.throttle = values.throttle;
+  key('Equal'); advance(1000);
+  assert.ok(values.throttle > 0);
 });

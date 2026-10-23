@@ -23,14 +23,31 @@ if (!supabaseUrl || !supabaseAnonKey) {
   process.exit(0);
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+const anonymous = createClient(supabaseUrl, supabaseAnonKey, {
   auth: { persistSession: false, autoRefreshToken: false }
+});
+
+const anonymousCheck = await anonymous.rpc('skylinetragedy_airport_details', { p_airport_code: 'KJFK' });
+if (anonymousCheck.error?.code !== '42501' && anonymousCheck.data?.status !== 'unauthenticated') {
+  throw new Error('Anonymous AIP access was not denied. Apply the AIP quota migration first.');
+}
+console.log('Anonymous AIP access denied.');
+if (!process.env.AIP_TEST_ACCESS_TOKEN) {
+  console.log('Skipping paid calls: AIP_TEST_ACCESS_TOKEN is not configured.');
+  process.exit(0);
+}
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+  global: { headers: { Authorization: `Bearer ${process.env.AIP_TEST_ACCESS_TOKEN}` } }
 });
 
 const callRpc = async (name, params) => {
   const { data, error } = await supabase.rpc(name, params);
   if (error) throw new Error(`${name} failed: ${error.message}`);
-  console.log(`${name}: status=${data?.status || 'unknown'}`);
+  if (!['ok', 'unavailable', 'rate_limited', 'insufficient_tokens'].includes(data?.status)) throw new Error(`${name}: unexpected status`);
+  const charged = ['rate_limited', 'insufficient_tokens'].includes(data.status) ? 0 : 1;
+  if (data.billing?.chargedTokens !== charged) throw new Error(`${name}: missing or incorrect billing`);
+  console.log(`${name}: status=${data.status}, charged=${charged}`);
   return data;
 };
 

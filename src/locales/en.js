@@ -521,6 +521,16 @@ const en = {
             submit: 'Search'
         },
         nearest: {
+            open: 'Nearby landing airports',
+            radius: 'Search radius',
+            suitability: 'Airports with runways matching aircraft requirements. Verify conditions before landing.',
+            map: 'Nearby landing airport map',
+            distance: 'DME',
+            bearing: 'Bearing',
+            left: 'left',
+            right: 'right',
+            divert: 'Divert direct-to',
+
             finding: 'Finding airports...',
             none: 'No airports found.',
             emergency_tag: 'EMERGENCY',
@@ -629,6 +639,24 @@ const en = {
       1: '01. OPERATIONAL LEVEL & INTEL',
       2: '02. FLIGHT PARAMETERS',
       3: '03. ROUTE SELECTION'
+    },
+    failures: {
+      profiles: {
+        rookie: 'Simple faults, one at a time; no random cascades. Some banks have no Rookie-safe faults. Difficulty limits may reduce the selected count.',
+        amateur: 'Manageable faults, one at a time; limited cascades.',
+        intermediate: 'Serious faults, up to two at once; standard cascades.',
+        advanced: 'Complex emergencies, up to three at once; faster cascades.',
+        pro: 'Catastrophic faults possible, up to four at once; strong cascades.',
+        devil: 'System-chain initiators favored; up to five random faults at once, plus faster, stronger cross-system cascades.',
+      },
+
+      edit: 'Edit difficulty',
+      title: 'FAILURE PROBABILITY', normal: 'Normal Simulation', custom: 'Not-so-normal',
+      count: 'Failures / flight', banks: 'Failure banks', engine: 'Engines', systems: 'Systems',
+      controls: 'Controls', environment: 'Environment', sensors: 'Sensors',
+      normal_hint: 'No random failures. Crew difficulty still applies.',
+      custom_hint: 'Approximate random failures over the estimated flight time. Cascades may add failures; selected banks apply to random triggers.',
+      empty: 'Select at least one failure bank to continue.'
     },
     difficulty: {
       rookie: 'ROOKIE',

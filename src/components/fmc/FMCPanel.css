@@ -847,3 +847,13 @@
     grid-template-columns: 1fr;
   }
 }
+.fmc-panel.fmc-panel { width: min(920px, calc(100vw - 32px)); max-height: 88vh; background: #0c1a29; border: 1px solid #344b60; border-radius: 18px; overflow: hidden; color: #dce9f5; font-family: Inter, system-ui, sans-serif; }
+.fmc-panel.preflight-tablet.preflight-tablet { width: 100%; min-height: 620px; background: #0c1a29; border-radius: 16px; font-family: Inter, system-ui, sans-serif; }
+.fmc-panel .fmc-header.fmc-header { background: #102236; border-bottom: 1px solid #2a4055; padding: 22px 24px; margin: 0; }
+.fmc-panel .fmc-header h3 { color: #e4eff9; font-size: 24px; letter-spacing: -.02em; text-transform: none; }
+.fmc-panel .fmc-nav { background: #0d1d2e; padding: 10px; gap: 5px; flex-wrap: wrap; border-bottom: 1px solid #293e51; }
+.fmc-panel .fmc-nav-btn { border-radius: 8px; border: 1px solid transparent; padding: 10px 12px; font-family: inherit; }
+.fmc-panel .fmc-nav-btn.active { background: #1c3e50; color: #8de6ec; border-color: #376978; }
+.fmc-panel .fmc-nav-icon { font-size: 10px; opacity: .65; }
+.fmc-panel .fmc-content { padding: 24px; min-height: 0; }
+.fmc-panel button:focus-visible { outline: 2px solid #7ae3ec; outline-offset: 2px; }

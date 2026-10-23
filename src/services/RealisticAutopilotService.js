@@ -7,6 +7,7 @@
  */
 
 import FMAService from './autoflight/FMAService.js';
+import { isNavFrequency } from '../utils/approachReference.js';
 
 class PIDController {
     constructor(kp, ki, kd, min, max, smoothing = 1.0) {
@@ -121,6 +122,11 @@ class RealisticAutopilotService {
         this.localizerPID = new PIDController(8.0, 0.18, 6.0, -35, 35, 0.3); // Output limited to +/- 35 deg correction
 
         this.engaged = false;
+        this.flightDirectorEnabled = false;
+        this.modeSelected = false;
+        this.couplingMode = 'CMD';
+        this.pendingGuidanceCapture = false;
+        this.activeWaypointAltitude = undefined;
         this.mode = 'HDG'; // Default mode
         this.vnavArmed = false;
         this.autothrottleArmed = true;
@@ -191,13 +197,37 @@ class RealisticAutopilotService {
         this.runwayGeometry = geometry;
     }
 
+    setFlightDirectorEnabled(enabled) {
+        this.flightDirectorEnabled = Boolean(enabled);
+        if (enabled && !this.modeSelected && !this.engaged) {
+            this.mode = 'CWS';
+            this.pendingGuidanceCapture = true;
+        }
+    }
+
+    setCouplingMode(mode) {
+        this.couplingMode = mode === 'CWS' ? 'CWS' : 'CMD';
+        if (this.couplingMode === 'CWS') {
+            this.setVNAVArmed(false);
+            this.setTargets({ mode: 'CWS' });
+            this.pendingGuidanceCapture = true;
+        } else if (this.mode === 'CWS') {
+            this.setTargets({ mode: 'HDG' });
+        }
+    }
+
     setNavFrequency(freq) {
+        if (!isNavFrequency(freq)) return false;
         this.nav1Frequency = freq;
         this.debugState.nav1Frequency = freq;
+        return true;
     }
 
     setVNAVArmed(armed) {
         this.vnavArmed = Boolean(armed);
+        if (this.vnavArmed && this.mode === 'CWS') {
+            this.setTargets({ mode: 'HDG' });
+        }
         if (!this.vnavArmed) this.lnavVS = null;
     }
 
@@ -289,6 +319,9 @@ class RealisticAutopilotService {
 
         if (normalizedTargets.mode) {
             this.mode = normalizedTargets.mode;
+            this.modeSelected = normalizedTargets.mode !== 'CWS';
+            this.couplingMode = normalizedTargets.mode === 'CWS' ? 'CWS' : 'CMD';
+            if (normalizedTargets.mode !== 'CWS') this.pendingGuidanceCapture = false;
         }
 
         this.targets = preserveExisting
@@ -554,10 +587,23 @@ class RealisticAutopilotService {
 
         let isShortFinal = false;
 
+        if (!this.runwayGeometry) {
+            ilsDebug.message = 'No approach runway selected';
+            this.debugState.ils = ilsDebug;
+            return { ilsDebug, isShortFinal };
+        }
+
+        if (this.runwayGeometry?.headingSource === 'designator-estimate'
+            || (this.runwayGeometry && !Number.isFinite(this.runwayGeometry.heading))) {
+            ilsDebug.message = 'ILS unavailable: verified runway heading required';
+            this.debugState.ils = ilsDebug;
+            return { ilsDebug, isShortFinal };
+        }
+
         if (this.runwayGeometry && typeof latitude === 'number' && typeof longitude === 'number') {
             const requiredFreq = this.runwayGeometry.ilsFrequency;
             let freqMatch = true;
-            if (requiredFreq && Math.abs(this.nav1Frequency - requiredFreq) > 0.05) {
+            if (!isNavFrequency(requiredFreq) || Math.abs(this.nav1Frequency - requiredFreq) > 0.005) {
                 freqMatch = false;
             }
 
@@ -747,11 +793,12 @@ class RealisticAutopilotService {
      */
     update(state, currentControls, dt) {
         const { ilsDebug: passiveIlsDebug } = this.updateIlsTelemetry(state);
-        if (!this.engaged) {
+        if (!this.engaged && !this.flightDirectorEnabled) {
             this.debugState = {
                 ...this.debugState,
                 mode: this.mode,
                 engaged: this.engaged,
+                nav1Frequency: this.nav1Frequency,
                 ils: passiveIlsDebug,
                 lnav: this.debugState.lnav,
                 lnavMessage: this.debugState.lnavMessage || ''
@@ -760,6 +807,10 @@ class RealisticAutopilotService {
         }
 
         const { airspeed, verticalSpeed, pitch, roll, heading, track, latitude, longitude, altitude } = state;
+        if (this.pendingGuidanceCapture) {
+            this.setTargets({ heading, altitude, vs: verticalSpeed, speed: airspeed });
+            this.pendingGuidanceCapture = false;
+        }
         const altitudeAGL = state.altitudeAGL;
         const onGround = state.onGround === true;
         const beta = state.beta || 0;
@@ -779,9 +830,12 @@ class RealisticAutopilotService {
         } else if (this.targets.ias === undefined) {
              this.targets.ias = this.targets.speed;
         }
-        if (this.targets.vs === 0 && Math.abs(fVerticalSpeed) > 100 && this.altitudeMode !== 'hold') {
-             this.targets.vs = this.normalizeVerticalSpeedTarget(fVerticalSpeed, 0);
-             this.userVsTarget = this.targets.vs;
+        // Preserve the existing manual-VS acquisition away from capture. VNAV
+        // owns its vertical path and must never acquire a drifting climb rate.
+        if (!this.vnavArmed && this.targets.vs === 0 && Math.abs(fVerticalSpeed) > 100
+            && this.altitudeMode !== 'hold' && this.altitudeMode !== 'capture') {
+            this.targets.vs = this.normalizeVerticalSpeedTarget(fVerticalSpeed, 0);
+            this.userVsTarget = this.targets.vs;
         }
         if (this.targets.heading === 0) {
             this.targets.heading = this.normalizeHeading(fHeading, 360);
@@ -899,7 +953,7 @@ class RealisticAutopilotService {
             message: ''
         };
 
-        let isShortFinal = Boolean(ilsDebug?.active && Math.abs(ilsDebug?.distAlong || 0) < 6076);
+        let isShortFinal = Boolean(this.mode === 'ILS' && ilsDebug?.active && Math.abs(ilsDebug?.distAlong || 0) < 6076);
 
         if (this.mode === 'ILS' && ilsDebug.active) {
             this.targets.vs = Number.isFinite(ilsDebug.vsTarget) ? ilsDebug.vsTarget : 0;
@@ -912,26 +966,28 @@ class RealisticAutopilotService {
         if (ilsDebug.message) this.debugState.ilsMessage = ilsDebug.message;
 
         // Altitude Hold Logic (When not on Glideslope AND not in LNAV VNAV)
-        const vnavFixAltitude = this.vnavArmed && this.navPlan?.fix && Number.isFinite(this.navPlan.fix.altitude)
-            ? this.navPlan.fix.altitude : null;
+        const approachTracking = this.mode === 'ILS' && ilsDebug.active;
+        const pathAltitude = this.activeWaypointAltitude !== undefined
+            ? this.activeWaypointAltitude : this.navPlan?.fix?.altitude;
+        const vnavFixAltitude = !approachTracking && this.vnavArmed && Number.isFinite(pathAltitude)
+            ? pathAltitude : null;
         if (vnavFixAltitude !== null) {
             this.targets.altitude = vnavFixAltitude;
-            this.lnavVS = this.altitudePID.update(vnavFixAltitude, altitude, dt);
-        } else {
-            this.lnavVS = null;
         }
+        this.lnavVS = null;
         const lnavHandlingVS = vnavFixAltitude !== null;
-        const altitudeControlActive = !ilsDebug.gsCaptured && !lnavHandlingVS && this.targets.altitude > 0;
+        const altitudeControlActive = !approachTracking && Number.isFinite(this.targets.altitude)
+            && (this.targets.altitude > 0 || (lnavHandlingVS && this.targets.altitude === 0));
 
         // ILS/LNAV already computed their VS; pick up the right source
-        let effectiveVS = ilsDebug.active
+        let effectiveVS = approachTracking
             ? this.targets.vs
             : (lnavHandlingVS && this.lnavVS !== null ? this.lnavVS : this.userVsTarget);
 
         if (!altitudeControlActive) {
             this.resetAltitudeCapture();
             this.altitudePID.reset();
-            if (!ilsDebug.active) {
+            if (!approachTracking) {
                 this.targets.vs = lnavHandlingVS && Number.isFinite(effectiveVS)
                     ? this.normalizeVerticalSpeedTarget(effectiveVS, this.userVsTarget)
                     : this.userVsTarget;
@@ -957,7 +1013,9 @@ class RealisticAutopilotService {
                 this.altitudeMode = 'hold';
             }
 
-            if (farFromTarget || divergingFromTarget) {
+            // Once capture owns pitch, keep it through overshoot and recovery.
+            // Returning to armed here reapplies the selected climb/descent VS.
+            if (this.altitudeMode === 'armed' && (farFromTarget || divergingFromTarget)) {
                 this.altitudeMode = 'armed';
             } else if (this.altitudeMode !== 'hold' && (passedTarget || (nearTarget && movingTowardTarget) || (Math.abs(altError) <= 350 && movingTowardTarget))) {
                 this.altitudeMode = 'capture';
@@ -973,19 +1031,18 @@ class RealisticAutopilotService {
             // Estimate seconds to target altitude
             const absVS = Math.abs(verticalTrend);
             const secsToTarget = absVS > 50 ? Math.abs(altError) / absVS * 60 : Infinity;
-            const convergingWindow = secsToTarget < 5 || Math.abs(altError) <= captureBand;
 
             if (this.altitudeMode === 'armed') {
                 // User VS takes priority when non-zero; otherwise use altitude PID to correct drift
-                if (this.userVsTarget !== 0) {
+                if (!lnavHandlingVS && this.userVsTarget !== 0) {
                     effectiveVS = this.userVsTarget;
                 } else {
                     effectiveVS = this.clamp(commandedVS, -2500, 2500);
                 }
-                this.targets.vs = this.userVsTarget;
+                this.targets.vs = lnavHandlingVS ? Math.round(effectiveVS / 100) * 100 : this.userVsTarget;
 
                 const userVsSignMatches = this.userVsTarget !== 0 && Math.sign(this.userVsTarget) === Math.sign(altError);
-                const derateWindow = userVsSignMatches && (secsToTarget < 8 || Math.abs(altError) <= 320);
+                const derateWindow = !lnavHandlingVS && userVsSignMatches && (secsToTarget < 8 || Math.abs(altError) <= 320);
                 if (derateWindow) {
                     const approachScale = this.clamp(secsToTarget / 8, 0.18, 1.0);
                     effectiveVS = this.clamp((this.userVsTarget * approachScale) + (commandedVS * (1 - approachScale)), -2200, 2200);
@@ -998,8 +1055,8 @@ class RealisticAutopilotService {
                 // In hold: use small PID correction rather than hard 0, so pitch fights drift
                 effectiveVS = Math.abs(altError) <= holdBand
                     ? this.clamp(commandedVS * 0.3, -200, 200)
-                    : leveledVS;
-                this.targets.vs = convergingWindow ? Math.round(effectiveVS / 100) * 100 : this.userVsTarget;
+                    : (divergingFromTarget || farFromTarget ? this.clamp(commandedVS + Math.sign(altError) * Math.abs(verticalTrend) * 0.5, -2500, 2500) : leveledVS);
+                this.targets.vs = Math.round(effectiveVS / 100) * 100;
                 if (Math.abs(altError) <= holdBand || (passedTarget && Math.abs(verticalTrend) <= 300)) {
                     this.altitudeMode = 'hold';
                     if (Math.abs(verticalTrend) < 150) {
@@ -1012,6 +1069,10 @@ class RealisticAutopilotService {
             }
 
             this.lastAltitudeError = altError;
+            // Show a level-off target while retaining small drift corrections.
+            if (lnavHandlingVS && Math.abs(altError) <= holdBand) {
+                this.targets.vs = 0;
+            }
         }
 
         const { speed: targetSpeed, heading: targetHeading } = this.targets;
@@ -1165,6 +1226,7 @@ class RealisticAutopilotService {
         // Update Debug State
         this.debugState = {
             headingError,
+            nav1Frequency: this.nav1Frequency,
             targetRoll: targetRoll * 180 / Math.PI, // Convert to deg for display
             pitchError: (targetPitch - fPitch) * 180 / Math.PI,
             targetPitch: targetPitch * 180 / Math.PI,
@@ -1197,10 +1259,12 @@ class RealisticAutopilotService {
             autopilotDebug: this.debugState,
             targets: this.targets,
             vnavArmed: this.vnavArmed,
-            vnavPathAvailable: Number.isFinite(this.navPlan?.fix?.altitude),
+            vnavPathAvailable: Number.isFinite(pathAltitude),
             autothrottleArmed: this.autothrottleArmed
         });
 
+        // FD computes the same pitch/roll guidance without moving the controls.
+        if (!this.engaged) return null;
         return {
             throttle: isFinite(blendedThrottle) ? blendedThrottle : 0,
             elevator: isFinite(blendedElevator) ? blendedElevator : 0,

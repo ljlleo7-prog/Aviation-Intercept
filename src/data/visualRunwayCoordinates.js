@@ -1,3 +1,5 @@
+import sceneryRunways from './sceneryRunways.js';
+import { canonicalAirportCode } from '../utils/airportGroundCoordinates.js';
 // Threshold coordinates copied from the repository's local AIP runway export.
 // This is a visual subset for prototype airports; the full AIP import remains
 // the source of truth when its runway geometry becomes available at runtime.
@@ -15,9 +17,14 @@ const SURVEYED = {
   ]
 };
 
+export function getSourcedRunwayNames(airportCode) {
+  const code = canonicalAirportCode(airportCode);
+  return (SURVEYED[code] || sceneryRunways[code]?.runways || []).map(([first, second]) => `${first}/${second}`);
+}
+
 export function getVisualRunwayGeometry(airportCode, runwayEnd, fallback) {
-  const code = airportCode === 'LAX' ? 'KLAX' : airportCode === 'HKG' ? 'VHHH' : airportCode;
-  const row = SURVEYED[code]?.find(([first, second]) => runwayEnd === first || runwayEnd === second);
+  const code = canonicalAirportCode(airportCode);
+  const row = (SURVEYED[code] || sceneryRunways[code]?.runways)?.find(([first, second]) => runwayEnd === first || runwayEnd === second);
   if (!row) return fallback;
   const [, second, firstLat, firstLon, secondLat, secondLon, lengthFt, widthFt, elevationFt] = row;
   const reciprocal = runwayEnd === second;
@@ -33,6 +40,7 @@ export function getVisualRunwayGeometry(airportCode, runwayEnd, fallback) {
     width: widthFt * .3048,
     thresholdStart: { latitude: reciprocal ? secondLat : firstLat, longitude: reciprocal ? secondLon : firstLon, elevation: elevationFt },
     thresholdEnd: { latitude: reciprocal ? firstLat : secondLat, longitude: reciprocal ? firstLon : secondLon, elevation: elevationFt },
-    geometrySource: 'local-aip'
+    geometrySource: SURVEYED[code] ? 'local-aip' : 'openstreetmap',
+    geometryProvenance: SURVEYED[code] ? undefined : sceneryRunways[code]?.provenance
   };
 }

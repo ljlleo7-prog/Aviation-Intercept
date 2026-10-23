@@ -140,3 +140,37 @@
   .aircraft-main-panel-status .warning-readout { display: none; }
   .aircraft-main-panel-stage { min-width: 720px; }
 }
+
+/* Keep the original opaque panel artwork: fading individual SVG shapes
+   washes out the metal, legends, and control outlines. Lighting is additive. */
+.modern-flight-panel .aircraft-main-panel {
+  box-shadow: 0 12px 28px rgb(0 0 0 / .32),
+    inset 0 12px 32px rgb(255 210 145 / var(--panel-surround-light, 0));
+}
+
+/* A recessed lamp beneath the glareshield throws a narrow warm pool down
+   across the upper panel. The spill ends above the display windows. */
+.aircraft-main-panel-stage::before,
+.aircraft-main-panel-stage::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  opacity: var(--panel-spill, 0);
+}
+.aircraft-main-panel-stage::before {
+  left: 19%;
+  right: 19%;
+  top: 1.5%;
+  height: 2px;
+  border-radius: 50%;
+  background: #ffe2a2;
+  box-shadow: 0 2px 5px #ffd38bc2, 0 5px 14px #ffcb7866;
+}
+.aircraft-main-panel-stage::after {
+  left: 7%;
+  right: 7%;
+  top: 2%;
+  height: 27%;
+  background: radial-gradient(ellipse at 50% 0%, #ffd38b52 0%, #f4be6830 25%, #e8aa5010 55%, transparent 74%);
+}

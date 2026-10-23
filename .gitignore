@@ -15,10 +15,6 @@ pids
 *.seed
 *.pid.lock
 
-docs/
-!docs/
-docs/*
-!docs/V2_OUTSIDE_VISUALS_PLAN.md
 .trae/
 .superpowers/
 .remember/
@@ -48,6 +44,7 @@ build/Release
 
 # Dependency directories
 node_modules/
+scenery-source/
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
@@ -154,6 +151,11 @@ test-results/
 
 previews/
 
-docs/
 .rtk/
 .trae/
+
+# Local metadata and generated release staging
+.DS_Store
+/public/AIP_DATA/
+/release-artifacts/
+__pycache__/

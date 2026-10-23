@@ -1,8 +1,10 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { UNIT_DEFINITIONS, convertUnit, formatNumber } from '../../services/efb/UnitConversion.js';
 
 const FMCUtilities = () => {
+  const { tx } = useLanguage();
   const categories = Object.keys(UNIT_DEFINITIONS);
   const defaultCategory = categories[0];
   const [category, setCategory] = useState(defaultCategory);
@@ -25,34 +27,34 @@ const FMCUtilities = () => {
 
   return (
     <div className="fmc-page efb-page">
-      <h4 className="fmc-page-title">EFB TOOLS / UNIT CONVERSION</h4>
+      <h4 className="fmc-page-title">{tx("EFB TOOLS / UNIT CONVERSION")}</h4>
 
       <div className="fmc-section">
         <div className="fmc-section-header">
           <div>
-            <div className="fmc-label">Unit converter</div>
-            <div className="fmc-section-subtitle">Aviation-focused quick conversions.</div>
+            <div className="fmc-label">{tx("Unit converter")}</div>
+            <div className="fmc-section-subtitle">{tx("Aviation-focused quick conversions.")}</div>
           </div>
         </div>
         <div className="fmc-edit-grid">
           <div className="fmc-input-group">
-            <label>Category</label>
+            <label>{tx("Category")}</label>
             <select value={category} onChange={(event) => handleCategoryChange(event.target.value)}>
               {categories.map((item) => <option key={item} value={item}>{item.toUpperCase()}</option>)}
             </select>
           </div>
           <div className="fmc-input-group">
-            <label>Value</label>
+            <label>{tx("Value")}</label>
             <input type="number" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Enter value" />
           </div>
           <div className="fmc-input-group">
-            <label>From</label>
+            <label>{tx("From")}</label>
             <select value={fromUnit} onChange={(event) => setFromUnit(event.target.value)}>
               {units.map((unit) => <option key={unit} value={unit}>{UNIT_DEFINITIONS[category][unit].label}</option>)}
             </select>
           </div>
           <div className="fmc-input-group">
-            <label>To</label>
+            <label>{tx("To")}</label>
             <select value={toUnit} onChange={(event) => setToUnit(event.target.value)}>
               {units.map((unit) => <option key={unit} value={unit}>{UNIT_DEFINITIONS[category][unit].label}</option>)}
             </select>
@@ -62,14 +64,14 @@ const FMCUtilities = () => {
       </div>
 
       <div className="fmc-section">
-        <div className="fmc-label">Time / speed / distance</div>
+        <div className="fmc-label">{tx("Time / speed / distance")}</div>
         <div className="fmc-edit-grid">
-          <div className="fmc-input-group"><label>Distance (NM)</label><input type="number" value={distance} onChange={(event) => setDistance(event.target.value)} /></div>
-          <div className="fmc-input-group"><label>Ground speed (KT)</label><input type="number" value={speed} onChange={(event) => setSpeed(event.target.value)} /></div>
+          <div className="fmc-input-group"><label>{tx("Distance (NM)")}</label><input type="number" value={distance} onChange={(event) => setDistance(event.target.value)} /></div>
+          <div className="fmc-input-group"><label>{tx("Ground speed (KT)")}</label><input type="number" value={speed} onChange={(event) => setSpeed(event.target.value)} /></div>
         </div>
         <div className="fmc-route-summary-grid">
-          <div className="fmc-stat-card"><span className="fmc-stat-label">ETE</span><span className="fmc-stat-value">{timeHours === null ? '—' : `${Math.floor(timeHours * 60)} min`}</span></div>
-          <div className="fmc-stat-card"><span className="fmc-stat-label">NM / 10 min</span><span className="fmc-stat-value">{Number(speed) > 0 ? formatNumber(Number(speed) / 6, 1) : '—'}</span></div>
+          <div className="fmc-stat-card"><span className="fmc-stat-label">{tx("ETE")}</span><span className="fmc-stat-value">{timeHours === null ? '—' : `${Math.floor(timeHours * 60)} min`}</span></div>
+          <div className="fmc-stat-card"><span className="fmc-stat-label">{tx("NM / 10 min")}</span><span className="fmc-stat-value">{Number(speed) > 0 ? formatNumber(Number(speed) / 6, 1) : '—'}</span></div>
         </div>
       </div>
     </div>

@@ -1,3 +1,17 @@
+import { hasManualReversion } from '../../physics/controlTransmission.js';
+const applyTotalHydraulicLoss = (sys) => {
+    sys.systems.damage ??= {};
+    sys.systems.damage.hydraulicsFailed = true;
+    Object.entries(sys.systems.hydraulics || {}).forEach(([, circuit], index) => {
+        sys.applyComponentDamage?.({ componentId: `hydraulic.circuit.${String.fromCharCode(65 + index)}`, type: 'rupture', severity: 1 });
+        circuit.pressure = 0;
+        circuit.qty = 0;
+    });
+    if (!hasManualReversion(sys.aircraft, 'aileron')) sys.controls.aileron *= 0.1;
+    if (!hasManualReversion(sys.aircraft, 'elevator')) sys.controls.elevator *= 0.1;
+    sys.controls.rudder *= 0.1;
+};
+
 const SystemFailures = {
     // --- HYDRAULICS ---
     HYDRAULIC_FAILURE: {
@@ -18,8 +32,8 @@ const SystemFailures = {
                     sys.systems.damage ??= {};
                     sys.systems.damage.hydraulicsFailed = true;
                     const limit = 1.0 - (intensity * 0.8);
-                    sys.controls.aileron *= limit;
-                    sys.controls.elevator *= limit;
+                    if (!hasManualReversion(sys.aircraft, 'aileron')) sys.controls.aileron *= limit;
+                    if (!hasManualReversion(sys.aircraft, 'elevator')) sys.controls.elevator *= limit;
                     sys.controls.rudder *= limit;
                     if (sys.systems.hydraulics) {
                         sys.systems.hydraulics.sysA.pressure = 0;
@@ -70,14 +84,18 @@ const SystemFailures = {
                     sound: 'master_caution',
                     visual: 'buffet_minor'
                 }),
-                effect: (sys, intensity) => {
+                effect: (sys, intensity, context = {}) => {
+                    if (context.totalHydraulicLoss) {
+                        applyTotalHydraulicLoss(sys);
+                        return;
+                    }
                     sys.applyComponentDamage?.({ componentId: 'hydraulic.circuit.A', type: 'rupture', severity: 1 });
                     sys.applyComponentDamage?.({ componentId: 'hydraulic.circuit.B', type: 'rupture', severity: 0.9 });
                     sys.systems.damage ??= {};
                     sys.systems.damage.hydraulicsFailed = true;
                     const controlLimit = 0.75 - (intensity * 0.2);
-                    sys.controls.aileron *= Math.max(0.45, controlLimit);
-                    sys.controls.elevator *= Math.max(0.5, controlLimit);
+                    if (!hasManualReversion(sys.aircraft, 'aileron')) sys.controls.aileron *= Math.max(0.45, controlLimit);
+                    if (!hasManualReversion(sys.aircraft, 'elevator')) sys.controls.elevator *= Math.max(0.5, controlLimit);
                     sys.controls.rudder *= Math.max(0.4, controlLimit);
                     if (sys.systems.hydraulics?.sysA) {
                         sys.systems.hydraulics.sysA.pressure = Math.max(0, sys.systems.hydraulics.sysA.pressure - 600);
@@ -94,14 +112,18 @@ const SystemFailures = {
                     sound: 'hydraulic_whine',
                     visual: 'controls_stiff'
                 }),
-                effect: (sys, intensity) => {
+                effect: (sys, intensity, context = {}) => {
+                    if (context.totalHydraulicLoss) {
+                        applyTotalHydraulicLoss(sys);
+                        return;
+                    }
                     sys.applyComponentDamage?.({ componentId: 'hydraulic.circuit.A', type: 'rupture', severity: 1 });
                     sys.applyComponentDamage?.({ componentId: 'hydraulic.circuit.B', type: 'rupture', severity: 0.9 });
                     sys.systems.damage ??= {};
                     sys.systems.damage.hydraulicsFailed = true;
                     const limit = Math.max(0.1, 0.3 - (intensity * 0.15));
-                    sys.controls.aileron *= limit;
-                    sys.controls.elevator *= limit;
+                    if (!hasManualReversion(sys.aircraft, 'aileron')) sys.controls.aileron *= limit;
+                    if (!hasManualReversion(sys.aircraft, 'elevator')) sys.controls.elevator *= limit;
                     sys.controls.rudder *= limit;
                     if (sys.systems.hydraulics?.sysA) {
                         sys.systems.hydraulics.sysA.pressure = 0;
@@ -374,7 +396,10 @@ const SystemFailures = {
                     sound: "fire_bell",
                     visual: "red_light_flash"
                 }),
-                effect: (sys) => {
+                effect: (sys, intensity, ctx) => {
+                    const fire = sys.systems.fire;
+                    ctx.extinguishCount ??= fire.extinguishCount?.apu || 0;
+                    if ((fire.extinguishCount?.apu || 0) > ctx.extinguishCount) return;
                     sys.applyComponentDamage?.({ componentId: 'apu', type: 'fire_damage', severity: 1 });
                     sys.systems.damage ??= {};
                     sys.systems.damage.apuFailed = true;

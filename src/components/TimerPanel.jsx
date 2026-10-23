@@ -1,3 +1,4 @@
+import { useLanguage } from '../contexts/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import './TimerPanel.css';
 
@@ -8,6 +9,7 @@ const TimerPanel = ({
   flightPlan, 
   onClose 
 }) => {
+  const { tx } = useLanguage();
   const [autoDisengageUnstable, setAutoDisengageUnstable] = useState(true);
   const [autoDisengageWaypoint, setAutoDisengageWaypoint] = useState(true);
   const [autoDisengageTimer, setAutoDisengageTimer] = useState(false);
@@ -84,13 +86,13 @@ const TimerPanel = ({
   const handleStart = () => {
     // Pre-flight checks
     if (!flightData.autopilotEngaged) {
-      alert("Autopilot must be engaged to enable time acceleration.");
+      alert(tx("Autopilot must be engaged to enable time acceleration."));
       return;
     }
     
     // Stability Check
     if (Math.abs(flightData.roll) > 30 || Math.abs(flightData.pitch) > 15) {
-        alert("Aircraft is unstable. Cannot engage time acceleration.");
+        alert(tx("Aircraft is unstable. Cannot engage time acceleration."));
         return;
     }
 
@@ -113,30 +115,26 @@ const TimerPanel = ({
   return (
     <div className="timer-panel">
       <div className="panel-header">
-        <h3>Time Acceleration</h3>
+        <h3>{tx("Time Acceleration")}</h3>
         <button className="close-btn" onClick={onClose}>×</button>
       </div>
 
       <div className="panel-content">
         <div className="status-card">
             <div className={`status-indicator ${isActive ? 'active' : ''}`}>
-                {isActive ? '10x SPEED' : 'REAL TIME'}
+                {isActive ? tx("10x SPEED") : tx("REAL TIME")}
             </div>
             <div className="controls">
                 {!isActive ? (
-                    <button className="start-btn" onClick={handleStart}>
-                        ⏩ Engage 10x
-                    </button>
+                    <button className="start-btn" onClick={handleStart}>{tx("⏩ Engage 10x")}</button>
                 ) : (
-                    <button className="stop-btn" onClick={handleStop}>
-                        ⏹️ Disengage
-                    </button>
+                    <button className="stop-btn" onClick={handleStop}>{tx("⏹️ Disengage")}</button>
                 )}
             </div>
         </div>
 
         <div className="settings-section">
-            <h4>Auto-Disengage Conditions</h4>
+            <h4>{tx("Auto-Disengage Conditions")}</h4>
             
             <label className="checkbox-row">
                 <input 
@@ -144,7 +142,7 @@ const TimerPanel = ({
                     checked={autoDisengageUnstable}
                     onChange={e => setAutoDisengageUnstable(e.target.checked)}
                 />
-                <span>Unstable / AP Disconnect</span>
+                <span>{tx("Unstable / AP Disconnect")}</span>
             </label>
 
             <label className="checkbox-row">
@@ -153,7 +151,7 @@ const TimerPanel = ({
                     checked={autoDisengageWaypoint}
                     onChange={e => setAutoDisengageWaypoint(e.target.checked)}
                 />
-                <span>Next Waypoint</span>
+                <span>{tx("Next Waypoint")}</span>
             </label>
 
             <label className="checkbox-row">
@@ -162,7 +160,7 @@ const TimerPanel = ({
                     checked={autoDisengageTimer}
                     onChange={e => setAutoDisengageTimer(e.target.checked)}
                 />
-                <span>Timer ({timerDuration} min)</span>
+                <span>{tx('Timer (${minutes} min)', { minutes: timerDuration })}</span>
             </label>
 
             {autoDisengageTimer && (
@@ -175,13 +173,12 @@ const TimerPanel = ({
                         onChange={e => setTimerDuration(parseInt(e.target.value))}
                         disabled={isActive}
                     />
-                    <span>{timerDuration} min</span>
+                    <span>{tx('${minutes} min', { minutes: timerDuration })}</span>
                 </div>
             )}
             
             {isActive && autoDisengageTimer && (
-                <div className="countdown-display">
-                    Remaining: {formatTime(timerRemaining)}
+                <div className="countdown-display">{tx("Remaining:")}{formatTime(timerRemaining)}
                 </div>
             )}
         </div>

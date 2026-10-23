@@ -1,3 +1,4 @@
+import { useLanguage } from '../contexts/LanguageContext';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './TutorialOverlay.css';
 
@@ -134,7 +135,7 @@ const TUTORIAL_STEP_MAP = {
   ]
 };
 
-const buildInfoSteps = (tutorial) => [
+const buildInfoSteps = (tutorial, tx) => [
   {
     id: 'overview',
     title: tutorial?.title || 'Tutorial',
@@ -146,7 +147,7 @@ const buildInfoSteps = (tutorial) => [
   {
     id: 'briefing',
     title: 'Lesson Briefing',
-    instruction: `Focus areas: ${(tutorial?.topics || []).join(', ') || 'Cockpit systems'}. Use the listed panels and instruments during this practice scenario.`,
+    instruction: tx('Focus areas: ${topics}. Use the listed panels and instruments during this practice scenario.', { topics: (tutorial?.topics || []).map(topic => tx(topic)).join('、') || tx('Cockpit systems') }),
     action: 'Press Finish when you are ready to continue flying on your own.',
     condition: () => true,
     highlight: null
@@ -154,6 +155,7 @@ const buildInfoSteps = (tutorial) => [
 ];
 
 const TutorialOverlay = ({ tutorial, physicsState, radioMessages = [], currentFrequency, frequencyType, onClose }) => {
+  const { tx } = useLanguage();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
   const pendingAdvanceTimeoutRef = useRef(null);
@@ -163,8 +165,8 @@ const TutorialOverlay = ({ tutorial, physicsState, radioMessages = [], currentFr
     if (tutorial.guidanceMode === 'guided' && TUTORIAL_STEP_MAP[tutorial.id]) {
       return TUTORIAL_STEP_MAP[tutorial.id];
     }
-    return buildInfoSteps(tutorial);
-  }, [tutorial]);
+    return buildInfoSteps(tutorial, tx);
+  }, [tutorial, tx]);
 
   const currentStep = tutorialSteps[currentStepIndex];
   const isGuidedMode = tutorial?.guidanceMode === 'guided' && tutorialSteps.length > 0;
@@ -254,27 +256,27 @@ const TutorialOverlay = ({ tutorial, physicsState, radioMessages = [], currentFr
     <div className={`tutorial-overlay ${isMinimized ? 'minimized' : ''}`}>
       <div className="tutorial-header">
         <div>
-          <p className="tutorial-label">{tutorial.category?.replace('-', ' ') || 'Tutorial'}</p>
-          <h3>{currentStep.title}</h3>
+          <p className="tutorial-label">{tx(tutorial.title)}</p>
+          <h3>{tx(currentStep.title)}</h3>
         </div>
         <div className="tutorial-controls">
-          <button onClick={() => setIsMinimized(!isMinimized)} title={isMinimized ? 'Expand' : 'Minimize'}>
+          <button onClick={() => setIsMinimized(!isMinimized)} title={isMinimized ? tx("Expand") : tx("Minimize")}>
             {isMinimized ? '▲' : '▼'}
           </button>
-          <button onClick={onClose} title="Close Tutorial">✕</button>
+          <button onClick={onClose} title={tx("Close Tutorial")}>✕</button>
         </div>
       </div>
 
       {!isMinimized && (
         <div className="tutorial-content">
-          <p className="tutorial-step-count">Step {currentStepIndex + 1} / {tutorialSteps.length}</p>
-          <p className="tutorial-instruction">{currentStep.instruction}</p>
-          <p className="tutorial-action"><strong>{currentStep.action}</strong></p>
+          <p className="tutorial-step-count">{tx('Step ${current} / ${total}', { current: currentStepIndex + 1, total: tutorialSteps.length })}</p>
+          <p className="tutorial-instruction">{tx(currentStep.instruction)}</p>
+          <p className="tutorial-action"><strong>{tx(currentStep.action)}</strong></p>
 
           {tutorial.topics?.length > 0 && (
             <div className="tutorial-topic-strip">
               {tutorial.topics.map((topic) => (
-                <span key={topic}>{topic}</span>
+                <span key={topic}>{tx(topic)}</span>
               ))}
             </div>
           )}
@@ -285,11 +287,11 @@ const TutorialOverlay = ({ tutorial, physicsState, radioMessages = [], currentFr
               onClick={handleNext}
               disabled={isGuidedMode && !isLastStep && currentStep.id !== 'welcome' && !isConditionMet}
             >
-              {isLastStep ? 'Finish' : 'Next'}
+              {isLastStep ? tx("Finish") : tx("Next")}
             </button>
             {showWaitingText && (
               <span className="waiting-text">
-                {isConditionMet ? 'Action complete…' : 'Waiting for action...'}
+                {isConditionMet ? tx("Action complete…") : tx("Waiting for action...")}
               </span>
             )}
           </div>

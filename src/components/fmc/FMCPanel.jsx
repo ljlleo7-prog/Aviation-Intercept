@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import FMCService from '../../services/FMCService';
@@ -8,7 +9,9 @@ import FMCProgress from './FMCProgress';
 import FMCPerformance from './FMCPerformance';
 import FMCWeather from './FMCWeather';
 import FMCUtilities from './FMCUtilities';
+import FMCApproach from './FMCApproach';
 import './FMCPanel.css';
+import FlightMapWorkspace from '../FlightMapWorkspace';
 
 const FMCPanel = ({
   onClose,
@@ -27,23 +30,28 @@ const FMCPanel = ({
   onSelectArrival,
   routeSearchState,
   tabletReadiness,
-  routeValidation
+  routeValidation,
+  onActionRequest,
+  selectedArrival
 }) => {
+  const { tx } = useLanguage();
   const [activePage, setActivePage] = useState(preflightMode ? 'init' : 'progress');
   const fmcService = useMemo(() => new FMCService(), []);
   const planView = useMemo(() => fmcService.getPlanView(flightPlan), [fmcService, flightPlan]);
 
   const pages = [
-    { id: 'init', label: 'Overview', icon: '🧾' },
-    { id: 'route', label: 'Route', icon: '🗺️' },
-    { id: 'legs', label: 'Legs', icon: '📍' },
-    { id: 'progress', label: 'Live', icon: '📊' },
-    { id: 'perf', label: 'Load', icon: '✈️' },
-    { id: 'weather', label: 'Weather', icon: '🌦️' },
-    { id: 'tools', label: 'Tools', icon: '🧮' }
+    { id: 'maps', label: tx("Maps"), icon: '⌖' },
+    { id: 'init', label: tx("Overview"), icon: '🧾' },
+    { id: 'route', label: tx("Route"), icon: '🗺️' },
+    { id: 'legs', label: tx("Legs"), icon: '📍' },
+    { id: 'approach', label: tx('Approach'), icon: '↘' },
+    { id: 'progress', label: tx("Live"), icon: '📊' },
+    { id: 'perf', label: tx("Load"), icon: '✈️' },
+    { id: 'weather', label: tx("Weather"), icon: '🌦️' },
+    { id: 'tools', label: tx("Tools"), icon: '🧮' }
   ];
 
-  const visiblePages = preflightMode ? pages.filter((page) => page.id !== 'progress' || !preflightMode) : pages;
+  const visiblePages = preflightMode ? pages.filter((page) => !['progress', 'weather', 'tools', 'approach'].includes(page.id)) : pages;
 
   const handleUpdateLegs = (nextFlightPlan) => {
     if (preflightMode) {
@@ -67,14 +75,14 @@ const FMCPanel = ({
     <div className={`fmc-panel ${preflightMode ? 'preflight-tablet' : ''}`.trim()}>
       <div className="fmc-header">
         <div>
-          <div className="fmc-kicker">{preflightMode ? 'Dispatch tablet' : 'Flight computer'}</div>
-          <h3>{preflightMode ? 'Preflight setup' : 'Flight Computer'}</h3>
+          <div className="fmc-kicker">{preflightMode ? tx("Dispatch tablet") : tx("Flight computer")}</div>
+          <h3>{preflightMode ? tx("Preflight setup") : tx("Flight Computer")}</h3>
         </div>
         {preflightMode ? (
           <div className="fmc-tablet-statusbar">
-            <span className={`fmc-status-pill ${tabletReadiness?.isRouteReady ? 'ready' : ''}`}>Route</span>
-            <span className={`fmc-status-pill ${tabletReadiness?.isLoadoutReady ? 'ready' : ''}`}>Loadout</span>
-            <span className={`fmc-status-pill ${tabletReadiness?.isPerformanceReady ? 'ready' : ''}`}>Perf</span>
+            <span className={`fmc-status-pill ${tabletReadiness?.isRouteReady ? 'ready' : ''}`}>{tx("Route")}</span>
+            <span className={`fmc-status-pill ${tabletReadiness?.isLoadoutReady ? 'ready' : ''}`}>{tx("Loadout")}</span>
+            <span className={`fmc-status-pill ${tabletReadiness?.isPerformanceReady ? 'ready' : ''}`}>{tx("Perf")}</span>
           </div>
         ) : (
           <button className="fmc-close" onClick={onClose}>×</button>
@@ -84,19 +92,21 @@ const FMCPanel = ({
       <div className="fmc-nav">
         {visiblePages.map((page) => (
           <button key={page.id} className={`fmc-nav-btn ${activePage === page.id ? 'active' : ''}`} onClick={() => setActivePage(page.id)}>
-            <span className="fmc-nav-icon">{page.icon}</span>
-            <span className="fmc-nav-label">{page.label}</span>
+            <span className="fmc-nav-icon" aria-hidden="true">{String(visiblePages.indexOf(page) + 1).padStart(2, '0')}</span>
+            <span className="fmc-nav-label">{tx(page.label)}</span>
           </button>
         ))}
       </div>
 
       <div className="fmc-content">
+        {activePage === 'approach' && <FMCApproach flightState={flightState} arrival={selectedArrival || flightPlan?.arrival} onActionRequest={onActionRequest} />}
+        {activePage === 'maps' && <FlightMapWorkspace aircraftData={aircraftData} flightPlan={flightPlan} flightState={flightState} departure={preflightConfig?.selectedDeparture} arrival={preflightConfig?.selectedArrival} routeDetails={routeDetails} />}
         {!preflightMode && planView.validation.execPending && (
           <div className="fmc-banner warning" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-            <span>TEMPY {planView.validation.pendingChanges > 0 ? `· ${planView.validation.pendingChanges} pending change${planView.validation.pendingChanges === 1 ? '' : 's'}` : ''}</span>
+            <span>{tx("TEMPY")}{planView.validation.pendingChanges > 0 ? `· ${planView.validation.pendingChanges} pending change${planView.validation.pendingChanges === 1 ? '' : 's'}` : ''}</span>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={handleDiscardTemporaryPlan}>CANCEL MOD</button>
-              <button onClick={handleExecuteTemporaryPlan}>EXEC</button>
+              <button onClick={handleDiscardTemporaryPlan}>{tx("CANCEL MOD")}</button>
+              <button onClick={handleExecuteTemporaryPlan}>{tx("EXEC")}</button>
             </div>
           </div>
         )}
@@ -151,6 +161,8 @@ const FMCPanel = ({
 };
 
 FMCPanel.propTypes = {
+  onActionRequest: PropTypes.func,
+  selectedArrival: PropTypes.object,
   onClose: PropTypes.func,
   flightPlan: PropTypes.any,
   onUpdateFlightPlan: PropTypes.func,

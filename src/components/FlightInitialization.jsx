@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { normalizeFailureSelection } from '../config/flightFailures.js';
+import FlightFailureSettings from './FlightFailureSettings.jsx';
 import './FlightInitialization.css';
 import { randomFlightService } from '../services/randomFlightService.js';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -18,7 +20,7 @@ const FlightInitialization = ({
   isLoggedIn,
   offlineMode = false
 }) => {
-  const { t } = useLanguage();
+  const { t, tx } = useLanguage();
   const [currentStep, setCurrentStep] = useState(1);
 
   const {
@@ -35,7 +37,8 @@ const FlightInitialization = ({
     return !Number.isNaN(num) && num >= min && num <= max;
   };
 
-  const isStep1Valid = () => !!difficulty;
+  const failureSelection = normalizeFailureSelection(preflightConfig.failureSelection);
+  const isStep1Valid = () => !!difficulty && (failureSelection.mode === 'normal' || failureSelection.banks.length > 0);
   const isStep2Valid = () => (
     isValidNumber(crewCount, 1, 10) &&
     (useRandomTime || timeZulu.trim() !== '') &&
@@ -85,32 +88,28 @@ const FlightInitialization = ({
       {!offlineMode && (
         <div className="dispatch-section" style={{ marginBottom: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h2 className="section-header" style={{ borderBottom: 'none', marginBottom: 0 }}>Resume Flight</h2>
-            {resumeCheckLoading && <span className="intel-label">Checking cloud save…</span>}
+            <h2 className="section-header" style={{ borderBottom: 'none', marginBottom: 0 }}>{tx("Resume Flight")}</h2>
+            {resumeCheckLoading && <span className="intel-label">{tx("Checking cloud save…")}</span>}
           </div>
 
           {!isLoggedIn ? (
-            <p className="intel-text">Log in to sync flight progress and resume later.</p>
+            <p className="intel-text">{tx("Log in to sync flight progress and resume later.")}</p>
           ) : resumeCheckError ? (
-            <p className="intel-text" style={{ color: '#ff8a80' }}>Cloud save unavailable: {resumeCheckError}</p>
+            <p className="intel-text" style={{ color: '#ff8a80' }}>{tx("Cloud save unavailable:")}{resumeCheckError}</p>
           ) : resumeSave ? (
             <div className="tablet-handoff-note" style={{ marginBottom: 0 }}>
-              <div className="tablet-handoff-title">Previous Flight Found</div>
+              <div className="tablet-handoff-title">{tx("Previous Flight Found")}</div>
               <div className="tablet-handoff-text">
-                {resumeSave?.data?.aircraftModel || 'Aircraft'} ready to resume.
-                {lastSavedAt ? ` Last saved ${lastSavedAt}.` : ''}
+                {tx('${aircraft} ready to resume.', { aircraft: resumeSave?.data?.aircraftModel || tx('Aircraft') })}
+                {lastSavedAt ? tx(' Last saved ${time}.', { time: lastSavedAt }) : ''}
               </div>
               <div className="dispatch-actions" style={{ borderTop: 'none', paddingTop: '0.75rem', gap: '0.75rem' }}>
-                <button className="dispatch-btn primary" onClick={() => onResumeFlight?.(resumeSave)}>
-                  Resume Flight
-                </button>
-                <button className="dispatch-btn" onClick={onDiscardResumeSave}>
-                  Discard Save
-                </button>
+                <button className="dispatch-btn primary" onClick={() => onResumeFlight?.(resumeSave)}>{tx("Resume Flight")}</button>
+                <button className="dispatch-btn" onClick={onDiscardResumeSave}>{tx("Discard Save")}</button>
               </div>
             </div>
           ) : (
-            <p className="intel-text">No saved in-progress flight found for this account.</p>
+            <p className="intel-text">{tx("No saved in-progress flight found for this account.")}</p>
           )}
         </div>
       )}
@@ -142,19 +141,20 @@ const FlightInitialization = ({
           </div>
         </div>
 
+        <FlightFailureSettings difficulty={difficulty} selection={preflightConfig.failureSelection}
+          onChange={failureSelection => updatePreflightConfig({ failureSelection })} />
+
         {currentStep === 1 && (
           <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="dispatch-btn primary" onClick={handleNextStep} disabled={!isStep1Valid()}>
-              Continue
-            </button>
+            <button className="dispatch-btn primary" onClick={handleNextStep} disabled={!isStep1Valid()}>{tx("Continue")}</button>
           </div>
         )}
       </div>
 
       <div className="dispatch-section" style={{ opacity: currentStep === 2 ? 1 : 0.6, pointerEvents: currentStep === 2 ? 'auto' : 'none', transition: 'all 0.3s ease' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #30363d' }}>
-          <h2 className="section-header" style={{ borderBottom: 'none', marginBottom: 0 }}>Operations & Environment</h2>
-          <button className="dispatch-btn random" onClick={randomizeStep2} title="Randomize operations">🎲</button>
+          <h2 className="section-header" style={{ borderBottom: 'none', marginBottom: 0 }}>{tx("Operations & Environment")}</h2>
+          <button className="dispatch-btn random" onClick={randomizeStep2} title={tx("Randomize operations")}>🎲</button>
         </div>
 
         <div className="dispatch-grid compact-grid">
@@ -196,21 +196,20 @@ const FlightInitialization = ({
         </div>
 
         <div className="tablet-handoff-note">
-          <div className="tablet-handoff-title">Dispatch Tablet</div>
-          <div className="tablet-handoff-text">
-            Use the tablet to validate airports, review route status, and edit passengers, payload, reserve factor, and cruise altitude.
-          </div>
+          <div className="tablet-handoff-title">{tx("Dispatch Tablet")}</div>
+          <div className="tablet-handoff-text">{tx("Use the tablet to validate airports, review route status, and edit passengers, payload, reserve factor, and cruise altitude.")}</div>
           <div className="tablet-handoff-status">
-            <span className={`tablet-status-chip ${tabletReadiness?.isRouteReady ? 'ready' : ''}`}>ROUTE {selectedDeparture && selectedArrival ? 'SET' : 'OPEN'}</span>
-            <span className={`tablet-status-chip ${tabletReadiness?.isLoadoutReady ? 'ready' : ''}`}>LOADOUT {tabletReadiness?.isLoadoutReady ? 'SET' : 'OPEN'}</span>
-            <span className={`tablet-status-chip ${tabletReadiness?.isPerformanceReady ? 'ready' : ''}`}>PERF {tabletReadiness?.isPerformanceReady ? 'READY' : 'PENDING'}</span>
-            <span className={`tablet-status-chip ${aircraftSuggestions?.length ? 'ready' : ''}`}>TABLET READY</span>
+            <span className={`tablet-status-chip ${tabletReadiness?.isRouteReady ? 'ready' : ''}`}>{tx("ROUTE")}{selectedDeparture && selectedArrival ? tx("SET") : tx("OPEN")}</span>
+            <span className={`tablet-status-chip ${tabletReadiness?.isLoadoutReady ? 'ready' : ''}`}>{tx("LOADOUT")}{tabletReadiness?.isLoadoutReady ? tx("SET") : tx("OPEN")}</span>
+            <span className={`tablet-status-chip ${tabletReadiness?.isPerformanceReady ? 'ready' : ''}`}>{tx("PERF")}{tabletReadiness?.isPerformanceReady ? tx("READY") : tx("PENDING")}</span>
+            <span className={`tablet-status-chip ${aircraftSuggestions?.length ? 'ready' : ''}`}>{tx("TABLET READY")}</span>
           </div>
         </div>
 
         <div className="dispatch-actions" style={{ borderTop: 'none', paddingTop: 0 }}>
+          <button className="dispatch-btn" onClick={() => setCurrentStep(1)}>{t('initialization.failures.edit')}</button>
           <button className="dispatch-btn primary" onClick={handleInitializeFlight} disabled={!isReadyToFinalize} style={{ width: '100%' }}>
-            {isReadyToFinalize ? t('initialization.buttons.finalize') : 'Complete route and loadout in tablet'}
+            {isReadyToFinalize ? t('initialization.buttons.finalize') : tx("Complete route and loadout in tablet")}
           </button>
         </div>
       </div>

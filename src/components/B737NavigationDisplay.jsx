@@ -1,3 +1,4 @@
+import { getMapAirports } from '../services/airportMapData.js';
 import { useEffect, useMemo, useState, useId, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { airportService } from '../services/airportService';
@@ -52,8 +53,8 @@ export default function B737NavigationDisplay({ data }) {
     : null;
 
   const airports = useMemo(() => positionValid && (mode === 'airport' || mode === 'map')
-    ? airportService.getAirportsWithinRadius(latitude, longitude, Math.min(range, 80))
-    : [], [positionValid, latitude, longitude, range, mode]);
+    ? getMapAirports(airportService.getAllAirports(), latitude, longitude, Math.min(range, 80), data.aircraftData || data.aircraftModel, 24)
+    : [], [positionValid, latitude, longitude, range, mode, data.aircraftData, data.aircraftModel]);
 
   const radarTiles = (() => {
     if (!positionValid || (mode !== 'terrain' && mode !== 'weather')) return [];

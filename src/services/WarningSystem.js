@@ -201,8 +201,8 @@ class WarningSystem {
         if (systems.fire.apu) this.addWarning('FIRE_APU', 'APU FIRE', 'CRITICAL', true);
 
         // Hydraulics
-        if (systems.hydraulics.sysA.pressure < 1000) this.addWarning('HYD_A_LOW', 'HYD A PRESS LOW', 'ADVISORY');
-        if (systems.hydraulics.sysB.pressure < 1000) this.addWarning('HYD_B_LOW', 'HYD B PRESS LOW', 'ADVISORY');
+        if (systems.hydraulics.sysA.pressure < 1000) this.addWarning('HYD_A_LOW', 'HYD A PRESS LOW', 'WARNING');
+        if (systems.hydraulics.sysB.pressure < 1000) this.addWarning('HYD_B_LOW', 'HYD B PRESS LOW', 'WARNING');
 
         // Electrical
         if (!systems.electrical.gen1 && !systems.electrical.gen2 && !systems.electrical.apuGen) {
@@ -293,23 +293,21 @@ class WarningSystem {
     }
 
     checkSystemWarnings(physicsState) {
-        const { systems, fuel, engineParams } = physicsState;
+        const { systems, fuel } = physicsState;
 
         if (!systems) return;
 
-        // Engine Fire
-        if (Array.isArray(engineParams)) {
-            engineParams.forEach((eng, i) => {
-                if (eng.fire) this.addWarning(`ENG${i+1}_FIRE`, `ENGINE ${i+1} FIRE`, 'CRITICAL', true);
-            });
+        // Preserve the same fire IDs and detection during ground operations.
+        for (const key of ['eng1', 'eng2', 'apu']) {
+            if (systems.fire?.[key]) this.addWarning(`FIRE_${key.toUpperCase()}`, key === 'apu' ? 'APU FIRE' : `ENGINE ${key.slice(3)} FIRE`, 'CRITICAL', true);
         }
 
         // Fuel
-        if (fuel < 1000) this.addWarning('FUEL_LOW', 'FUEL LOW', 'WARNING');
+        if (fuel < 500) this.addWarning('FUEL_LOW', 'LOW FUEL', 'WARNING');
 
         // Hydraulics
-        if (systems.hydraulics?.sysA?.pressure < 1000) this.addWarning('HYD_A_LOW', 'HYD A PRESS LOW', 'ADVISORY');
-        if (systems.hydraulics?.sysB?.pressure < 1000) this.addWarning('HYD_B_LOW', 'HYD B PRESS LOW', 'ADVISORY');
+        if (systems.hydraulics?.sysA?.pressure < 1000) this.addWarning('HYD_A_LOW', 'HYD A PRESS LOW', 'WARNING');
+        if (systems.hydraulics?.sysB?.pressure < 1000) this.addWarning('HYD_B_LOW', 'HYD B PRESS LOW', 'WARNING');
     }
 }
 

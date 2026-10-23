@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { randomFlightService } from '../../services/randomFlightService';
@@ -17,6 +18,7 @@ const DEFAULT_RANDOM_ROUTE_DETAILS = {
 };
 
 const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSuggestions }) => {
+  const { tx } = useLanguage();
   const [isRandomizingDispatch, setIsRandomizingDispatch] = useState(false);
   const cruiseSpeed = useMemo(() => {
     const base = 450;
@@ -75,12 +77,12 @@ const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSug
 
   return (
     <div className="fmc-page">
-      <h4 className="fmc-page-title">INITIALIZATION</h4>
+      <h4 className="fmc-page-title">{tx("INITIALIZATION")}</h4>
 
       <div className="fmc-section fmc-dispatch-randomizer">
         <div>
-          <div className="fmc-label">Dispatch Draft</div>
-          <div className="fmc-section-subtitle">Generate a random airline, callsign, aircraft, route, and load sheet.</div>
+          <div className="fmc-label">{tx("Dispatch Draft")}</div>
+          <div className="fmc-section-subtitle">{tx("Generate a random airline, callsign, aircraft, route, and load sheet.")}</div>
         </div>
         <button
           type="button"
@@ -88,12 +90,12 @@ const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSug
           onClick={handleRandomDispatch}
           disabled={isRandomizingDispatch}
         >
-          {isRandomizingDispatch ? 'Generating…' : 'Random Dispatch'}
+          {isRandomizingDispatch ? tx("Generating…") : tx("Random Dispatch")}
         </button>
       </div>
 
       <div className="fmc-input-group">
-        <label>Flight Number</label>
+        <label>{tx("Flight Number")}</label>
         <input
           type="text"
           value={preflightConfig?.callsign || ''}
@@ -103,7 +105,7 @@ const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSug
       </div>
 
       <div className="fmc-input-group">
-        <label>Airline</label>
+        <label>{tx("Airline")}</label>
         <input
           type="text"
           value={preflightConfig?.airline || ''}
@@ -113,12 +115,12 @@ const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSug
       </div>
 
       <div className="fmc-input-group">
-        <label>Aircraft Model</label>
+        <label>{tx("Aircraft Model")}</label>
         <select
           value={preflightConfig?.aircraftModel || ''}
           onChange={(e) => onUpdatePreflight?.({ aircraftModel: e.target.value })}
         >
-          <option value="">Select aircraft</option>
+          <option value="">{tx("Select aircraft")}</option>
           {aircraftSuggestions?.map((aircraft) => (
             <option key={aircraft.model} value={aircraft.model}>
               {aircraft.model}
@@ -128,7 +130,7 @@ const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSug
       </div>
 
       <div className="fmc-input-group">
-        <label>Cruise Altitude (ft)</label>
+        <label>{tx("Cruise Altitude (ft)")}</label>
         <input
           type="number"
           value={preflightConfig?.cruiseHeight || 0}
@@ -138,24 +140,24 @@ const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSug
       </div>
 
       <div className="fmc-section">
-        <div className="fmc-label">EST CRUISE SPD</div>
+        <div className="fmc-label">{tx("EST CRUISE SPD")}</div>
         <div className="fmc-value">{cruiseSpeed} KTAS</div>
       </div>
 
       {routeProcedureSummary.hasRoute && (
         <div className="fmc-section">
-          <div className="fmc-label">Route Convention</div>
+          <div className="fmc-label">{tx("Route Convention")}</div>
           <div className="fmc-airport-meta">
-            <span>SID {routeProcedureSummary.sid || '---'} → {routeProcedureSummary.firstWaypoint || '---'} {routeProcedureSummary.sidValid ? 'OK' : 'MISMATCH'}</span>
-            <span>STAR {routeProcedureSummary.star || '---'} → {routeProcedureSummary.lastWaypoint || '---'} {routeProcedureSummary.starValid ? 'OK' : 'MISMATCH'}</span>
+            <span>SID {routeProcedureSummary.sid || '---'} → {routeProcedureSummary.firstWaypoint || '---'} {routeProcedureSummary.sidValid ? tx("OK") : tx("MISMATCH")}</span>
+            <span>STAR {routeProcedureSummary.star || '---'} → {routeProcedureSummary.lastWaypoint || '---'} {routeProcedureSummary.starValid ? tx("OK") : tx("MISMATCH")}</span>
           </div>
         </div>
       )}
 
       {aircraftData && (
         <div className="fmc-section">
-          <div className="fmc-label">AIRCRAFT</div>
-          <div className="fmc-value">{aircraftData.name || preflightConfig?.aircraftModel || 'Unknown'}</div>
+          <div className="fmc-label">{tx("AIRCRAFT")}</div>
+          <div className="fmc-value">{aircraftData.name || preflightConfig?.aircraftModel || tx("Unknown")}</div>
         </div>
       )}
     </div>

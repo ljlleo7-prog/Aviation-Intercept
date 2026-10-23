@@ -31,6 +31,21 @@ export function papiColors(eye, width, glideAngle = 3) {
   return [-.5, -1 / 6, 1 / 6, .5].map((offset) => angle >= glideAngle + offset ? 0xfff5e6 : 0xff3020);
 }
 
+export function runwayMarkingPositions(length, width) {
+  const positions = [];
+  const rectangle = (x, z, w, l) => {
+    const left = x - w / 2; const right = x + w / 2;
+    const near = z + l / 2; const far = z - l / 2;
+    positions.push(left, .08, near, right, .08, near, left, .08, far,
+      left, .08, far, right, .08, near, right, .08, far);
+  };
+  for (let z = -90; z > -length + 60; z -= 65) rectangle(0, z, .8, 30);
+  for (const x of [-width * .3, -width * .18, width * .18, width * .3]) rectangle(x, -30, 2.5, 27);
+  for (const x of [-width * .26, width * .26]) rectangle(x, -300, 3, 45);
+  for (const x of [-width * .46, width * .46]) rectangle(x, -length / 2, .65, length - 35);
+  return positions;
+}
+
 export function airportBuildingLayout(length, width, otherStrips = []) {
   const strips = [{ x: 0, z: 0, heading: 0, length, width }, ...otherStrips];
   const buildings = [];

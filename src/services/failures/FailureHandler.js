@@ -1,3 +1,5 @@
+import { isFailureSuitable } from '../../config/failureDifficulty.js';
+import { normalizeFailureSelection } from '../../config/flightFailures.js';
 
 import eventBus from '../eventBus.js';
 import BaseFailure from './BaseFailure.js';
@@ -15,6 +17,12 @@ class FailureHandler {
     constructor(config = {}) {
         this.difficulty = config.difficulty || 'intermediate';
         this.engineCount = config.engineCount || 2;
+        this.failureSelection = normalizeFailureSelection(config.failureSelection);
+        this.failureFlightSeconds = Math.max(60, Number(config.failureFlightSeconds) || 3600);
+        this.randomElapsed = 0;
+        this.randomTriggered = new Set();
+        this.randomHazard = 0;
+        this.nextRandomHazard = -Math.log(1 - Math.random());
         this.activeFailures = new Map(); // id -> failureInstance
         this.registry = new Map();
         this.incidentLog = [];
@@ -41,6 +49,60 @@ class FailureHandler {
     }
 
 
+    getSerializableState() {
+        return {
+            difficulty: this.difficulty,
+            failureSelection: this.failureSelection,
+            failureFlightSeconds: this.failureFlightSeconds,
+            randomElapsed: this.randomElapsed,
+            randomTriggered: [...this.randomTriggered],
+            randomHazard: this.randomHazard,
+            nextRandomHazard: this.nextRandomHazard,
+            time: this.time,
+            nextCheckTime: this.nextCheckTime,
+            failureSequence: this.failureSequence,
+            incidentLog: this.incidentLog,
+            activeFailures: [...this.activeFailures].map(([id, failure]) => ({
+                id, currentStage: failure.currentStage, timeInStage: failure.timeInStage,
+                totalTime: failure.totalTime, intensity: failure.intensity,
+                variation: failure.variation, logs: failure.logs, instanceId: failure.instanceId
+            })),
+            graph: {
+                time: this.graphExecutor.time,
+                pendingActivations: [...this.graphExecutor.pendingActivations],
+                edgeDecisions: [...this.graphExecutor.edgeDecisions]
+            }
+        };
+    }
+
+    restoreState(state) {
+        this.reset();
+        this.difficulty = state.difficulty || this.difficulty;
+        this.settings = this.getDifficultySettings(this.difficulty);
+        this.failureSelection = normalizeFailureSelection(state.failureSelection);
+        this.failureFlightSeconds = Math.max(60, Number(state.failureFlightSeconds) || 3600);
+        this.randomElapsed = state.randomElapsed ?? 0;
+        this.randomTriggered = new Set(state.randomTriggered || []);
+        this.randomHazard = state.randomHazard ?? 0;
+        this.nextRandomHazard = state.nextRandomHazard ?? -Math.log(1 - Math.random());
+        this.time = state.time ?? 0;
+        this.nextCheckTime = state.nextCheckTime ?? this.time + 10;
+        this.failureSequence = state.failureSequence ?? 0;
+        this.incidentLog = state.incidentLog || [];
+        for (const saved of state.activeFailures || []) {
+            const definition = this.registry.get(saved.id);
+            if (!definition || !definition.stages?.[saved.currentStage]) continue;
+            const failure = new BaseFailure(definition, saved.variation?.context || {}, this.handleTransition);
+            Object.assign(failure, saved);
+            this.activeFailures.set(saved.id, failure);
+        }
+        if (state.graph) {
+            this.graphExecutor.time = state.graph.time ?? this.time;
+            this.graphExecutor.pendingActivations = new Map(state.graph.pendingActivations || []);
+            this.graphExecutor.edgeDecisions = new Set(state.graph.edgeDecisions || []);
+        }
+    }
+
     registerGroup(group) {
         if (!group) return;
         Object.values(group).forEach(def => {
@@ -51,16 +113,16 @@ class FailureHandler {
     getDifficultySettings(difficulty) {
         const settings = {
             rookie: {
-                probMultiplier: 0.0,
-                maxFailures: 0,
-                cascadeProbabilityMultiplier: 0.35,
+                probMultiplier: 0.2,
+                maxFailures: 1,
+                cascadeProbabilityMultiplier: 0,
                 cascadeDelayMultiplier: 2.5,
                 blockedCascadeClasses: ['catastrophic']
             },
             amateur: {
                 probMultiplier: 0.2,
                 maxFailures: 1,
-                cascadeProbabilityMultiplier: 0.65,
+                cascadeProbabilityMultiplier: 0.35,
                 cascadeDelayMultiplier: 1.5,
                 blockedCascadeClasses: []
             },
@@ -101,7 +163,8 @@ class FailureHandler {
         const settings = this.getDifficultySettings(difficulty);
         return {
             difficulty,
-            probabilityMultiplier: settings.cascadeProbabilityMultiplier ?? 1,
+            probabilityMultiplier: difficulty === 'rookie' && context.source !== 'random'
+                ? 0.35 : settings.cascadeProbabilityMultiplier ?? 1,
             delayMultiplier: settings.cascadeDelayMultiplier ?? 1,
             blockedCascadeClasses: Array.isArray(settings.blockedCascadeClasses) ? [...settings.blockedCascadeClasses] : []
         };
@@ -129,6 +192,11 @@ class FailureHandler {
             triggerFailure: (id, context) => this.triggerFailure(id, context),
             getCascadePolicy: (sourceFailure) => this.getCascadePolicy(sourceFailure?.variation?.context)
         });
+
+        if (!flightState?.onGround) {
+            this.randomElapsed += dt;
+            this.randomHazard += dt * this.failureSelection.count / this.failureFlightSeconds;
+        }
 
         // Random triggering logic
         if (this.time > this.nextCheckTime) {
@@ -194,12 +262,18 @@ class FailureHandler {
     }
 
     triggerFailure(id, context = {}) {
-        if (this.activeFailures.has(id)) return;
+        if (this.activeFailures.has(id)) return false;
+        // Scripted scenario incidents remain explicit. Random incidents and
+        // their descendants obey the same suitability and concurrency limits.
+        if (context.source === 'random' &&
+            (!isFailureSuitable(id, this.difficulty) ||
+                (this.activeFailures.size >= this.settings.maxFailures &&
+                    !(this.difficulty === 'devil' && context.cascadeEdgeId)))) return false;
 
         const def = this.registry.get(id);
         if (!def) {
             console.warn(`Failure definition not found: ${id}`);
-            return;
+            return false;
         }
 
         // Auto-fill context if needed
@@ -210,7 +284,7 @@ class FailureHandler {
             context.cascadePolicy = this.getCascadePolicy(context);
         }
 
-        if (def.category === 'engine' && context.engineIndex === undefined) {
+        if ((def.category === 'engine' || ['uncontained_engine_failure', 'bird_strike'].includes(id)) && context.engineIndex === undefined) {
             context.engineIndex = Math.floor(Math.random() * this.engineCount);
         }
 
@@ -233,6 +307,7 @@ class FailureHandler {
             data: context,
             time: this.time
         });
+        return true;
     }
     
     handleTransition(failure, desc) {
@@ -286,12 +361,30 @@ class FailureHandler {
         }
     }
 
-    checkRandomFailures() {
-        // Random failures remain disabled; scenarios trigger failures explicitly.
+    checkRandomFailures(flightState = {}) {
+        if (this.failureSelection.mode !== 'custom' || flightState.onGround ||
+            this.randomElapsed > this.failureFlightSeconds || this.randomHazard < this.nextRandomHazard ||
+            this.activeFailures.size >= this.settings.maxFailures) return;
+        const candidates = [...this.registry.values()].filter(def =>
+            this.failureSelection.banks.includes(def.category) && isFailureSuitable(def.id, this.difficulty) &&
+            !this.activeFailures.has(def.id) && !this.randomTriggered.has(def.id));
+        if (!candidates.length) return;
+        // Devil favors system-chain initiators, while preserving selected banks.
+        const weight = definition => this.difficulty === 'devil' &&
+            this.graph.edges.some(edge => edge.sourceRuntimeId === definition.id) ? 4 : 1;
+        let draw = Math.random() * candidates.reduce((total, definition) => total + weight(definition), 0);
+        const definition = candidates.find(candidate => (draw -= weight(candidate)) < 0) || candidates[candidates.length - 1];
+        this.triggerFailure(definition.id, { source: 'random' });
+        this.randomTriggered.add(definition.id);
+        this.nextRandomHazard = this.randomHazard - Math.log(1 - Math.random());
     }
 
     reset() {
         this.activeFailures.clear();
+        this.randomElapsed = 0;
+        this.randomTriggered.clear();
+        this.randomHazard = 0;
+        this.nextRandomHazard = -Math.log(1 - Math.random());
         this.time = 0;
         this.graphExecutor.reset();
     }

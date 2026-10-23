@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useCallback } from 'react';
 import PropTypes from 'prop-types';
 import AirportSearchInput from '../AirportSearchInput.jsx';
@@ -17,22 +18,22 @@ const getAirportSummary = (airport) => {
   return [airport.city, airport.country].filter(Boolean).join(', ');
 };
 
-const buildSearchStatus = (query, results, selectedAirport) => {
+const buildSearchStatus = (query, results, selectedAirport, tx) => {
   if (selectedAirport) {
     return { status: 'selected', message: '' };
   }
 
   const trimmed = query.trim();
   if (!trimmed) {
-    return { status: 'idle', message: 'Search by ICAO, IATA, city, or airport name.' };
+    return { status: 'idle', message: tx('Search by ICAO, IATA, city, or airport name.') };
   }
 
   if (trimmed.length < MIN_SEARCH_LENGTH) {
-    return { status: 'idle', message: 'Enter at least 2 characters.' };
+    return { status: 'idle', message: tx('Enter at least 2 characters.') };
   }
 
   if (results.length === 0) {
-    return { status: 'no-results', message: `No airport found for “${trimmed.toUpperCase()}”.` };
+    return { status: 'no-results', message: tx('No airport found for “${query}”.', { query: trimmed.toUpperCase() }) };
   }
 
   return { status: 'idle', message: '' };
@@ -49,7 +50,8 @@ const AirportSelectorCard = ({
   helperText,
   validationState = 'idle'
 }) => {
-  const searchStatus = buildSearchStatus(value, searchResults, selectedAirport);
+  const { tx } = useLanguage();
+  const searchStatus = buildSearchStatus(value, searchResults, selectedAirport, tx);
   const status = validationState !== 'idle' ? validationState : searchStatus.status;
 
   return (
@@ -108,6 +110,7 @@ const FMCRoute = ({
   routeSearchState,
   routeValidation
 }) => {
+  const { tx } = useLanguage();
   const handleAlternateSelect = useCallback((airport) => {
     onUpdateRouteDetails?.({ alternate: airport || null });
   }, [onUpdateRouteDetails]);
@@ -128,11 +131,11 @@ const FMCRoute = ({
 
   return (
     <div className="fmc-page fmc-route-page">
-      <h4 className="fmc-page-title">Route Setup</h4>
+      <h4 className="fmc-page-title">{tx("Route Setup")}</h4>
 
       <div className="fmc-route-grid">
         <AirportSelectorCard
-          label="Departure"
+          label={tx("Departure")}
           placeholder="Search departure airport"
           value={routeSearchState?.departureQuery || ''}
           selectedAirport={selectedDeparture}
@@ -144,7 +147,7 @@ const FMCRoute = ({
         />
 
         <AirportSelectorCard
-          label="Arrival"
+          label={tx("Arrival")}
           placeholder="Search arrival airport"
           value={routeSearchState?.arrivalQuery || ''}
           selectedAirport={selectedArrival}
@@ -177,24 +180,24 @@ const FMCRoute = ({
 
       <div className="fmc-section">
         <div className="fmc-section-header">
-          <div className="fmc-label">Route Summary</div>
-          <div className={`fmc-status-pill ${routeValidation?.isRouteReady ? 'ready' : ''}`}>{routeValidation?.isRouteReady ? 'Ready' : 'Incomplete'}</div>
+          <div className="fmc-label">{tx("Route Summary")}</div>
+          <div className={`fmc-status-pill ${routeValidation?.isRouteReady ? 'ready' : ''}`}>{routeValidation?.isRouteReady ? tx("Ready") : tx('Incomplete')}</div>
         </div>
         <div className="fmc-route-summary-grid">
           <div className="fmc-stat-card">
-            <span className="fmc-stat-label">Departure runway</span>
+            <span className="fmc-stat-label">{tx("Departure runway")}</span>
             <span className="fmc-stat-value">{routeDetails?.departureRunway || 'Not set'}</span>
           </div>
           <div className="fmc-stat-card">
-            <span className="fmc-stat-label">Arrival runway</span>
+            <span className="fmc-stat-label">{tx("Arrival runway")}</span>
             <span className="fmc-stat-value">{routeDetails?.landingRunway || 'Not set'}</span>
           </div>
           <div className="fmc-stat-card">
-            <span className="fmc-stat-label">Waypoints</span>
+            <span className="fmc-stat-label">{tx("Waypoints")}</span>
             <span className="fmc-stat-value">{routeDetails?.waypoints?.length || 0}</span>
           </div>
           <div className="fmc-stat-card">
-            <span className="fmc-stat-label">Distance</span>
+            <span className="fmc-stat-label">{tx("Distance")}</span>
             <span className="fmc-stat-value">
               {selectedDeparture && selectedArrival
                 ? `${airportService.calculateDistance(selectedDeparture, selectedArrival).toLocaleString()} NM`
@@ -206,7 +209,7 @@ const FMCRoute = ({
 
       {flightState && (
         <div className="fmc-section">
-          <div className="fmc-label">Current position</div>
+          <div className="fmc-label">{tx("Current position")}</div>
           <div className="fmc-value">{flightState.latitude?.toFixed(4)}, {flightState.longitude?.toFixed(4)}</div>
         </div>
       )}

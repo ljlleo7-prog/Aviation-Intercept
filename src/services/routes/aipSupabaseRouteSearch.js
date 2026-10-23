@@ -1,4 +1,4 @@
-import { supabase } from '../aviationIntercept/SupabaseClient.js';
+import { callAipRpc } from '../aipRpcClient.js';
 import { PROVIDER_STATUS, ROUTE_SOURCES } from './routeTypes.js';
 
 const DEFAULT_AIP_CYCLE = '2605';
@@ -34,14 +34,6 @@ export const searchSupabaseAipRoute = async ({ departure, arrival, options = {} 
   const departureCode = getAirportCode(departure);
   const arrivalCode = getAirportCode(arrival);
 
-  if (!supabase) {
-    return {
-      status: PROVIDER_STATUS.UNAVAILABLE,
-      message: 'Supabase is not configured for AIP route search.',
-      billing: { chargedTokens: 0 }
-    };
-  }
-
   if (!departureCode || !arrivalCode) {
     return {
       status: PROVIDER_STATUS.UNAVAILABLE,
@@ -51,7 +43,7 @@ export const searchSupabaseAipRoute = async ({ departure, arrival, options = {} 
   }
 
   try {
-    const { data, error } = await supabase.rpc('skylinetragedy_search_aip_route', {
+    const data = await callAipRpc('skylinetragedy_search_aip_route', {
       p_departure_code: departureCode,
       p_arrival_code: arrivalCode,
       p_region_code: options.regionCode || '*',
@@ -59,21 +51,13 @@ export const searchSupabaseAipRoute = async ({ departure, arrival, options = {} 
       p_limit: options.limit || 1
     });
 
-    if (error) {
-      return {
-        status: PROVIDER_STATUS.PROVIDER_FAILED,
-        message: error.message || 'Supabase AIP route search failed.',
-        billing: { chargedTokens: 0 }
-      };
-    }
-
     const response = data || {};
     if (response.status !== PROVIDER_STATUS.OK) {
       return {
         status: response.status || PROVIDER_STATUS.UNAVAILABLE,
         message: response.message || 'No Supabase AIP route found for this airport pair.',
         metrics: response.metrics || null,
-        billing: { chargedTokens: 0 }
+        billing: data?.billing || { chargedTokens: 0 }
       };
     }
 
@@ -87,7 +71,7 @@ export const searchSupabaseAipRoute = async ({ departure, arrival, options = {} 
         status: PROVIDER_STATUS.UNAVAILABLE,
         message: 'Supabase AIP route did not include usable waypoint coordinates.',
         metrics: response.metrics || null,
-        billing: { chargedTokens: 0 }
+        billing: data?.billing || { chargedTokens: 0 }
       };
     }
 
@@ -110,10 +94,10 @@ export const searchSupabaseAipRoute = async ({ departure, arrival, options = {} 
           supabaseAipMetrics: metrics,
           localAipLegs: Array.isArray(response.route?.legs) ? response.route.legs : []
         },
-        billing: { chargedTokens: 0 }
+        billing: data?.billing || { chargedTokens: 0 }
       },
       metrics,
-      billing: { chargedTokens: 0 }
+      billing: data?.billing || { chargedTokens: 0 }
     };
   } catch (error) {
     return {

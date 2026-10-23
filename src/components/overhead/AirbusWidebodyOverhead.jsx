@@ -79,7 +79,7 @@ function LowerSection({ count, control }) {
   return <><Module title="ANTI ICE / CABIN PRESS"><div className="awb-row">{control('WING', 'ice.wingAntiIce')}{range(count).map(n => control(`ENG ${n}`, `ice.eng${n}AntiIce`))}{control('PROBE HEAT', 'ice.probeHeat')}{control('LDG ELEV', null, { kind: 'rotary' })}{control('DITCHING', null, { kind: 'fire' })}</div></Module>
     <Module title="EXT LT / APU / INT LT"><div className="awb-row">{[['STROBE', 'strobe'], ['BEACON', 'beacon'], ['NAV & LOGO', 'nav'], ['LAND', 'landing'], ['NOSE', 'taxi']].map(([label, key]) => control(label, `lighting.${key}`, { kind: 'toggle' }))}
       {control('MASTER SW', 'apu.master')}{control('START', 'apu.start', { status: '' })}{control('OVHD INTEG', null, { kind: 'rotary' })}
-    </div><div className="awb-row">{control('SEAT BELTS', 'signs.seatBelts', { kind: 'toggle' })}{control('NO SMOKING', 'signs.noSmoking', { kind: 'toggle' })}{control('EMER EXIT LT', 'lighting.emergencyLights', { kind: 'toggle' })}{control('DOME', null, { kind: 'rotary' })}</div></Module></>;
+    </div><div className="awb-row">{control('SEAT BELTS', 'signs.seatBelts', { kind: 'toggle' })}{control('NO SMOKING', 'signs.noSmoking', { kind: 'toggle' })}{control('EMER EXIT LT', 'lighting.emergencyLights', { kind: 'toggle' })}{control('DOME', 'lighting.dome', { kind: 'toggle' })}</div></Module></>;
 }
 
 function SideColumn({ side, model, control }) {

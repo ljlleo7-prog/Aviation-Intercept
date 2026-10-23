@@ -1,61 +1,37 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import en from '../locales/en.js';
-import zh from '../locales/zh.js';
+import PropTypes from 'prop-types';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { LANGUAGE_STORAGE_KEY, readLanguage, translate, translateText } from '../utils/localization.js';
 
 const LanguageContext = createContext();
 
 export const LanguageProvider = ({ children }) => {
-  // Default to English, or detect browser language if desired
-  const [language, setLanguage] = useState('en');
-  const [translations, setTranslations] = useState(en);
+  const [language, updateLanguage] = useState(() => {
+    try {
+      return readLanguage(window.localStorage);
+    } catch {
+      return 'en';
+    }
+  });
+  const setLanguage = (next) => updateLanguage(previous => {
+    const value = typeof next === 'function' ? next(previous) : next;
+    return value === 'zh' ? 'zh' : 'en';
+  });
 
   useEffect(() => {
-    // Update translations when language changes
-    setTranslations(language === 'zh' ? zh : en);
+    try {
+      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    } catch {
+      // Language switching still works when storage is unavailable.
+    }
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
   }, [language]);
 
-  const toggleLanguage = () => {
-    setLanguage(prev => (prev === 'en' ? 'zh' : 'en'));
-  };
-
-  const t = (key, params = {}) => {
-    if (!key || typeof key !== 'string') return key || '';
-    
-    const useEnglishOnly = key.startsWith('ui.systems') || key.startsWith('ui.flight');
-    // Handle nested keys (e.g., "narrative.phases.boarding.title")
-    const keys = key.split('.');
-    let value = useEnglishOnly ? en : translations;
-    
-    for (const k of keys) {
-      if (value && value[k] !== undefined) {
-        value = value[k];
-      } else {
-        // Fallback to English if missing in current language
-        let fallbackValue = en;
-        for (const fk of keys) {
-            if (fallbackValue && fallbackValue[fk] !== undefined) {
-                fallbackValue = fallbackValue[fk];
-            } else {
-                return key; // Return key if not found in fallback either
-            }
-        }
-        value = fallbackValue;
-        break; // Found in fallback
-      }
-    }
-
-    // Handle template replacement (e.g., "${callsign}")
-    if (typeof value === 'string') {
-      return value.replace(/\$\{(\w+)\}/g, (match, param) => {
-        return params[param] !== undefined ? params[param] : match;
-      });
-    }
-
-    return value;
-  };
+  const toggleLanguage = () => setLanguage(previous => previous === 'en' ? 'zh' : 'en');
+  const t = useCallback((key, params) => translate(language, key, params), [language]);
+  const tx = useCallback((text, params) => translateText(language, text, params), [language]);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, t, tx }}>
       {children}
     </LanguageContext.Provider>
   );
@@ -63,8 +39,14 @@ export const LanguageProvider = ({ children }) => {
 
 export const useLanguage = () => {
   const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
-  }
+  if (!context) throw new Error('useLanguage must be used within a LanguageProvider');
   return context;
 };
+
+export const TranslatedText = ({ children }) => {
+  const { tx } = useLanguage();
+  return tx(children);
+};
+
+LanguageProvider.propTypes = { children: PropTypes.node };
+TranslatedText.propTypes = { children: PropTypes.string };

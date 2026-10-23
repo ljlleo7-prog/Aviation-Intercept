@@ -1,7 +1,9 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 
 const FMCLegs = ({ flightPlan, onUpdateFlightPlan, flightState, fmcService, planView }) => {
+  const { tx } = useLanguage();
   const activeLegs = planView?.model?.fms?.activePlan?.legs || [];
   const temporaryLegs = planView?.model?.fms?.temporaryPlan?.legs || [];
   const isPreflightMode = typeof flightState === 'undefined' || flightState === null;
@@ -73,12 +75,12 @@ const FMCLegs = ({ flightPlan, onUpdateFlightPlan, flightState, fmcService, plan
   return (
     <div className="fmc-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <h4 className="fmc-page-title">LEGS</h4>
-        <span className={`fmc-status-pill ${isTempPlan ? '' : 'ready'}`}>{isTempPlan ? 'TEMP' : 'ACTIVE'}</span>
+        <h4 className="fmc-page-title">{tx("LEGS")}</h4>
+        <span className={`fmc-status-pill ${isTempPlan ? '' : 'ready'}`}>{isTempPlan ? tx('TEMP') : tx("ACTIVE")}</span>
       </div>
 
       {waypoints.length === 0 ? (
-        <div className="fmc-empty">No waypoints in flight plan</div>
+        <div className="fmc-empty">{tx("No waypoints in flight plan")}</div>
       ) : (
         <div className="fmc-legs-list">
           {waypoints.map((wp, idx) => {
@@ -96,27 +98,27 @@ const FMCLegs = ({ flightPlan, onUpdateFlightPlan, flightState, fmcService, plan
                 <div className="fmc-leg-header">
                   <span className="fmc-leg-num">{idx + 1}</span>
                   <span className="fmc-leg-label">{waypointLabel}</span>
-                  {isActive && <span className="fmc-leg-badge">ACTIVE</span>}
-                  {isChanged && <span className="fmc-leg-badge" style={{ background: '#f59e0b', color: '#0f172a' }}>MOD</span>}
+                  {isActive && <span className="fmc-leg-badge">{tx("ACTIVE")}</span>}
+                  {isChanged && <span className="fmc-leg-badge" style={{ background: '#f59e0b', color: '#0f172a' }}>{tx("MOD")}</span>}
                 </div>
 
                 {editIdx === idx ? (
                   <div className="fmc-leg-edit">
                     <input type="number" placeholder="Alt (ft)" value={altConstraint} onChange={(e) => setAltConstraint(e.target.value)} />
                     <input type="number" placeholder="Speed (kt)" value={spdConstraint} onChange={(e) => setSpdConstraint(e.target.value)} />
-                    <button onClick={() => handleSaveConstraint(idx)}>Save</button>
-                    <button onClick={() => setEditIdx(null)}>Cancel</button>
+                    <button onClick={() => handleSaveConstraint(idx)}>{tx("Save")}</button>
+                    <button onClick={() => setEditIdx(null)}>{tx("Cancel")}</button>
                   </div>
                 ) : (
                   <div className="fmc-leg-details">
                     <div className="fmc-leg-coords">{latitudeText}, {longitudeText}</div>
                     {isDiscontinuity ? (
-                      <div className="fmc-leg-constraints"><span>Route discontinuity — EXEC required after edits</span></div>
+                      <div className="fmc-leg-constraints"><span>{tx("Route discontinuity — EXEC required after edits")}</span></div>
                     ) : (
                       (wp.altConstraint || wp.spdConstraint) && (
                         <div className="fmc-leg-constraints">
-                          {wp.altConstraint && <span>ALT: {wp.altConstraint} ft</span>}
-                          {wp.spdConstraint && <span>SPD: {wp.spdConstraint} kt</span>}
+                          {wp.altConstraint && <span>{tx("ALT:")}{wp.altConstraint} ft</span>}
+                          {wp.spdConstraint && <span>{tx("SPD:")}{wp.spdConstraint} kt</span>}
                         </div>
                       )
                     )}
@@ -126,10 +128,10 @@ const FMCLegs = ({ flightPlan, onUpdateFlightPlan, flightState, fmcService, plan
                           setEditIdx(idx);
                           setAltConstraint(wp.altConstraint || '');
                           setSpdConstraint(wp.spdConstraint || '');
-                        }}>Edit</button>
+                        }}>{tx("Edit")}</button>
                       )}
-                      <button onClick={() => handleInsertDiscontinuity(idx)}>DISCO</button>
-                      <button onClick={() => handleDelete(idx)}>Delete</button>
+                      <button onClick={() => handleInsertDiscontinuity(idx)}>{tx("DISCO")}</button>
+                      <button onClick={() => handleDelete(idx)}>{tx("Delete")}</button>
                     </div>
                   </div>
                 )}

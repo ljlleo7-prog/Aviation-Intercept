@@ -1,3 +1,7 @@
+import FlightFailureSettings from './FlightFailureSettings.jsx';
+import { normalizeFailureSelection } from '../config/flightFailures.js';
+import useAirportResults from '../hooks/useAirportResults.js';
+import { useLanguage } from '../contexts/LanguageContext';
 import React, { useEffect, useState, useCallback } from 'react';
 import './RouteSelectionFrame.css';
 import './FlightInitialization.css';
@@ -8,7 +12,6 @@ import {
 import LocalRouteMap from './LocalRouteMap';
 import ProcedureMiniMap from './ProcedureMiniMap.jsx';
 import { calculateDistance } from '../utils/distanceCalculator';
-import { airportService } from '../services/airportService';
 
 const calcRouteDistance = (departure, waypoints, arrival) => {
   const pts = [departure, ...(waypoints || []), arrival].filter(p => p?.latitude != null && p?.longitude != null);
@@ -87,20 +90,18 @@ const applyRouteAlternative = (routeData, candidateId) => {
 
 // Inline airport search field
 const AirportSearchField = ({ label, value, onSelect }) => {
+  const { tx } = useLanguage();
   const [query, setQuery] = useState(value ? `${value.iata || value.icao} – ${value.name}` : '');
-  const [results, setResults] = useState([]);
+  const results = useAirportResults(query, 8);
   const [open, setOpen] = useState(false);
 
   const search = useCallback((q) => {
     setQuery(q);
-    if (q.length < 2) { setResults([]); return; }
-    setResults(airportService.searchAirports(q).slice(0, 8));
     setOpen(true);
   }, []);
 
   const pick = (airport) => {
     setQuery(`${airport.iata || airport.icao} – ${airport.name}`);
-    setResults([]);
     setOpen(false);
     onSelect(airport);
   };
@@ -114,7 +115,7 @@ const AirportSearchField = ({ label, value, onSelect }) => {
         onChange={e => search(e.target.value)}
         onFocus={() => results.length && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Search by IATA, ICAO, city…"
+        placeholder={tx("Search by IATA, ICAO, city…")}
       />
       {open && results.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', zIndex: 100, maxHeight: '200px', overflowY: 'auto' }}>
@@ -156,6 +157,7 @@ const RouteSelectionFrame = ({
   routeData: externalRouteData, routeAuthState = 'guest', aircraftType = '',
   preflightConfig = {}, updatePreflightConfig, aircraftSuggestions = []
 }) => {
+  const { tx, t } = useLanguage();
   const [departure, setDeparture] = useState(externalDeparture || null);
   const [arrival, setArrival] = useState(externalArrival || null);
   const [routeData, setRouteData] = useState(DEFAULT_ROUTE_DATA);
@@ -249,7 +251,11 @@ const RouteSelectionFrame = ({
     setRouteData(DEFAULT_ROUTE_DATA);
   };
 
+  const failureSelection = normalizeFailureSelection(preflightConfig.failureSelection);
+  const isFailureSelectionValid = failureSelection.mode === 'normal' || failureSelection.banks.length > 0;
+
   const isFormValid = () => {
+    if (!isFailureSelectionValid) return false;
     if (difficulty === 'rookie') return Boolean(departure && arrival);
     if (!departure || !arrival || !routeData.departureGate || !routeData.departureRunway || !routeData.arrivalGate || !routeData.landingRunway) return false;
     if (['intermediate', 'advanced', 'pro', 'devil'].includes(difficulty) && routeData.waypoints.length === 0) return false;
@@ -273,14 +279,14 @@ const RouteSelectionFrame = ({
   return (
     <div style={{ width: '100%', maxWidth: '680px', margin: '0 auto', padding: '2rem 1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-          <h2 style={{ margin: 0, fontSize: '1.5rem' }}>Flight Plan</h2>
-          <span style={{ background: 'rgba(255,255,255,0.1)', padding: '3px 12px', borderRadius: '20px', fontSize: '11px', color: '#94a3b8', letterSpacing: '1px' }}>{(difficulty || 'rookie').toUpperCase()}</span>
+          <h2 style={{ margin: 0, fontSize: '1.5rem' }}>{tx("Flight Plan")}</h2>
+          <span style={{ background: 'rgba(255,255,255,0.1)', padding: '3px 12px', borderRadius: '20px', fontSize: '11px', color: '#94a3b8', letterSpacing: '1px' }}>{t(`initialization.difficulty.${difficulty || 'rookie'}`)}</span>
         </div>
-        <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 1rem' }}>Scroll through each section to configure your route</p>
+        <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 1rem' }}>{tx("Scroll through each section to configure your route")}</p>
 
         {/* 0 — Difficulty */}
         {onSetDifficulty && (
-          <Section step="0" title="Difficulty">
+          <Section step="0" title={tx("Difficulty")}>
             <div className="difficulty-buttons" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {['rookie', 'amateur', 'intermediate', 'advanced', 'pro', 'devil'].map(level => (
                 <button
@@ -288,17 +294,21 @@ const RouteSelectionFrame = ({
                   className={`difficulty-btn ${level} ${difficulty === level ? 'active' : ''}`}
                   onClick={() => onSetDifficulty(level)}
                 >
-                  {level}
+                  {t(`initialization.difficulty.${level}`)}
                 </button>
               ))}
             </div>
+            {updatePreflightConfig && <FlightFailureSettings difficulty={difficulty}
+              selection={preflightConfig.failureSelection}
+              onChange={failureSelection => updatePreflightConfig({ failureSelection })}
+            />}
           </Section>
         )}
 
         {/* 1 — Airports */}
-        <Section step="1" title="Airports">
-          <AirportSearchField label="Departure" value={departure} onSelect={handleSelectDeparture} />
-          <AirportSearchField label="Arrival" value={arrival} onSelect={handleSelectArrival} />
+        <Section step="1" title={tx("Airports")}>
+          <AirportSearchField label={tx("Departure")} value={departure} onSelect={handleSelectDeparture} />
+          <AirportSearchField label={tx("Arrival")} value={arrival} onSelect={handleSelectArrival} />
           {departure && arrival && (
             <button
               className="action-btn"
@@ -306,17 +316,17 @@ const RouteSelectionFrame = ({
               onClick={() => fetchRoute(departure, arrival, relaxAirways)}
               disabled={isGeneratingRoute}
             >
-              {isGeneratingRoute ? 'Generating route…' : 'Generate Route'}
+              {isGeneratingRoute ? tx("Generating route…") : tx("Generate Route")}
             </button>
           )}
         </Section>
 
         {/* 1.5 — Aircraft & Operations */}
         {updatePreflightConfig && (
-          <Section step="1.5" title="Aircraft & Operations">
+          <Section step="1.5" title={tx("Aircraft & Operations")}>
             <div className="dispatch-grid compact-grid">
               <div className="parameter-group">
-                <label>Aircraft</label>
+                <label>{tx("Aircraft")}</label>
                 <input
                   list="aircraft-suggestions"
                   className="dispatch-input"
@@ -329,31 +339,31 @@ const RouteSelectionFrame = ({
                 </datalist>
               </div>
               <div className="parameter-group">
-                <label>Airline</label>
-                <input className="dispatch-input" value={preflightConfig.airline || ''} onChange={e => updatePreflightConfig({ airline: e.target.value })} placeholder="Airline name" />
+                <label>{tx("Airline")}</label>
+                <input className="dispatch-input" value={preflightConfig.airline || ''} onChange={e => updatePreflightConfig({ airline: e.target.value })} placeholder={tx("Airline name")} />
               </div>
               <div className="parameter-group">
-                <label>Callsign</label>
+                <label>{tx("Callsign")}</label>
                 <input className="dispatch-input" value={preflightConfig.callsign || ''} onChange={e => updatePreflightConfig({ callsign: e.target.value })} placeholder="e.g. TEST001" />
               </div>
               <div className="parameter-group">
-                <label>Crew</label>
+                <label>{tx("Crew")}</label>
                 <input type="number" className="dispatch-input" value={preflightConfig.crewCount || 2} min="1" max="10" onChange={e => updatePreflightConfig({ crewCount: Number(e.target.value) })} />
               </div>
               <div className="parameter-group">
-                <label>Passengers</label>
+                <label>{tx("Passengers")}</label>
                 <input type="number" className="dispatch-input" value={preflightConfig.pax || ''} onChange={e => updatePreflightConfig({ pax: Number(e.target.value) })} placeholder="e.g. 150" />
               </div>
               <div className="parameter-group">
-                <label>Payload (kg)</label>
+                <label>{tx("Payload (kg)")}</label>
                 <input type="number" className="dispatch-input" value={preflightConfig.payload || ''} onChange={e => updatePreflightConfig({ payload: Number(e.target.value) })} placeholder="e.g. 20000" />
               </div>
               <div className="parameter-group">
-                <label>Cruise Alt (ft)</label>
+                <label>{tx("Cruise Alt (ft)")}</label>
                 <input type="number" className="dispatch-input" value={preflightConfig.cruiseHeight || ''} onChange={e => updatePreflightConfig({ cruiseHeight: Number(e.target.value) })} placeholder="e.g. 35000" />
               </div>
               <div className="parameter-group">
-                <label>Fuel Reserve (hr)</label>
+                <label>{tx("Fuel Reserve (hr)")}</label>
                 <input type="number" step="0.1" className="dispatch-input" value={preflightConfig.fuelReserve ?? ''} onChange={e => updatePreflightConfig({ fuelReserve: Number(e.target.value) })} placeholder="e.g. 0.1" />
               </div>
             </div>
@@ -362,11 +372,10 @@ const RouteSelectionFrame = ({
 
         {/* 2 — Route */}
         {departure && arrival && showWaypoints && (
-          <Section step="2" title={`Enroute ${routeDistance ? `· ${routeDistance} nm` : ''}`}>
+          <Section step="2" title={`${tx('Enroute')} ${routeDistance ? `· ${routeDistance} nm` : ''}`}>
             {routeAlternatives.length > 1 && (
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>
-                  Route Alternatives ({routeAlternatives.length})
+                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Route Alternatives (")}{routeAlternatives.length})
                 </label>
                 <select
                   value={selectedAlternative?.candidateId || ''}
@@ -383,8 +392,7 @@ const RouteSelectionFrame = ({
             )}
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>
-                Waypoints <span style={{ color: '#475569' }}>(space-separated)</span>
+              <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Waypoints")}<span style={{ color: '#475569' }}>{tx("(space-separated)")}</span>
               </label>
               <input
                 style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '8px 10px', color: '#fff', fontSize: '13px', fontFamily: 'monospace', boxSizing: 'border-box' }}
@@ -395,9 +403,7 @@ const RouteSelectionFrame = ({
             </div>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#94a3b8', marginBottom: '1rem', cursor: 'pointer' }}>
-              <input type="checkbox" checked={relaxAirways} onChange={e => handleRelaxAirwaysChange(e.target.checked)} />
-              Relax airway limits (direct fallback legs)
-            </label>
+              <input type="checkbox" checked={relaxAirways} onChange={e => handleRelaxAirwaysChange(e.target.checked)} />{tx("Relax airway limits (direct fallback legs)")}</label>
 
             <LocalRouteMap
               departure={departure} arrival={arrival} waypoints={routeData.waypoints}
@@ -413,9 +419,7 @@ const RouteSelectionFrame = ({
                   </div>
                 ))}
                 {routeData.routeSource === 'built-in' && routeData.routeFallbackUsed && (
-                  <div style={{ marginTop: '6px', padding: '6px 8px', background: 'rgba(255,193,7,0.08)', borderLeft: '2px solid #FFC107' }}>
-                    Local AIP covers CN/SG/HK/FR/DE/GB/RU/JP/CA. Try ZBAA–ZSPD or VHHH–WSSS for published routes.
-                  </div>
+                  <div style={{ marginTop: '6px', padding: '6px 8px', background: 'rgba(255,193,7,0.08)', borderLeft: '2px solid #FFC107' }}>{tx("Local AIP covers CN/SG/HK/FR/DE/GB/RU/JP/CA. Try ZBAA–ZSPD or VHHH–WSSS for published routes.")}</div>
                 )}
               </div>
             )}
@@ -424,30 +428,30 @@ const RouteSelectionFrame = ({
 
         {/* 3 — Departure procedures */}
         {departure && (
-          <Section step="3" title={`Departure · ${departure.iata || departure.icao}`}>
+          <Section step="3" title={`${tx('Departure')} · ${departure.iata || departure.icao}`}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Gate/Ramp</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Gate/Ramp")}</label>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <input style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px' }} value={routeData.departureGate} onChange={e => handleChange('departureGate', e.target.value)} placeholder="A12" />
                   <button className="generate-btn" onClick={() => handleChange('departureGate', generateGate())}>🎲</button>
                 </div>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Taxiway</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Taxiway")}</label>
                 <input style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }} value={routeData.departureTaxiway} onChange={e => handleChange('departureTaxiway', e.target.value)} placeholder="A" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Runway</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Runway")}</label>
                 <select style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px' }} value={routeData.departureRunway} onChange={e => handleChange('departureRunway', e.target.value)}>
-                  <option value="">Select Runway</option>
+                  <option value="">{tx("Select Runway")}</option>
                   {availableRunwaysDep.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               {showSidStar && (
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>
-                    SID <span style={{ color: '#475569' }}>({hasPublishedProcedures ? 'published' : 'synthetic'})</span>
+                    SID <span style={{ color: '#475569' }}>({hasPublishedProcedures ? tx("published") : tx("synthetic")})</span>
                   </label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px' }} value={routeData.sid} onChange={e => handleChange('sid', e.target.value)} placeholder="OMA12D" />
@@ -462,12 +466,12 @@ const RouteSelectionFrame = ({
 
         {/* 4 — Arrival procedures */}
         {arrival && (
-          <Section step="4" title={`Arrival · ${arrival.iata || arrival.icao}`}>
+          <Section step="4" title={`${tx('Arrival')} · ${arrival.iata || arrival.icao}`}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
               {showSidStar && (
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>
-                    STAR <span style={{ color: '#475569' }}>({hasPublishedProcedures ? 'published' : 'synthetic'})</span>
+                    STAR <span style={{ color: '#475569' }}>({hasPublishedProcedures ? tx("published") : tx("synthetic")})</span>
                   </label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px' }} value={routeData.star} onChange={e => handleChange('star', e.target.value)} placeholder="DXB45A" />
@@ -476,18 +480,18 @@ const RouteSelectionFrame = ({
                 </div>
               )}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Runway</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Runway")}</label>
                 <select style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px' }} value={routeData.landingRunway} onChange={e => handleChange('landingRunway', e.target.value)}>
-                  <option value="">Select Runway</option>
+                  <option value="">{tx("Select Runway")}</option>
                   {availableRunwaysArr.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Taxiway</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Taxiway")}</label>
                 <input style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }} value={routeData.landingTaxiway} onChange={e => handleChange('landingTaxiway', e.target.value)} placeholder="B" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Gate/Ramp</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Gate/Ramp")}</label>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <input style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '7px 10px', color: '#fff', fontSize: '13px' }} value={routeData.arrivalGate} onChange={e => handleChange('arrivalGate', e.target.value)} placeholder="D05" />
                   <button className="generate-btn" onClick={() => handleChange('arrivalGate', generateGate())}>🎲</button>
@@ -501,16 +505,14 @@ const RouteSelectionFrame = ({
         {/* Actions */}
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #1e293b' }}>
           {difficulty === 'rookie' && (
-            <button className="skip-btn" style={{ flex: 1 }} onClick={onSkip}>Skip (Use Defaults)</button>
+            <button className="skip-btn" style={{ flex: 1 }} onClick={onSkip} disabled={!isFailureSelectionValid}>{tx("Skip (Use Defaults)")}</button>
           )}
           <button
             className="confirm-btn"
             style={{ flex: 2 }}
             onClick={() => onConfirm({ ...routeData, departure, arrival })}
             disabled={!isFormValid()}
-          >
-            Confirm Flight Plan
-          </button>
+          >{tx("Confirm Flight Plan")}</button>
         </div>
     </div>
   );

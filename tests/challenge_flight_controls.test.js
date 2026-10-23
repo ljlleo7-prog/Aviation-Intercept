@@ -49,3 +49,35 @@ test('async physics initialization seeds controls once and preserves subsequent 
   assert.equal(controls.getControls().throttles[0], 0.4);
   assert.equal(controls.getControls().throttles[1], 0.8);
 });
+
+test('held cockpit roll demand reaches the live physics update through hydraulic failure', () => {
+  const physics = createChallengePhysics();
+  physics.setAutopilot(false);
+  physics.failureSystem.triggerFailure('hydraulic_failure');
+  const controls = createControls({ current: physics });
+  controls.setRoll(0.3);
+  let first;
+  for (let index = 0; index < 120; index++) {
+    const state = physics.update(controls.getControls(), 1 / 60);
+    if (index === 20) first = state.controls.roll;
+    assert.equal(state.hasCrashed, false);
+  }
+  assert.ok(first > 0.005, `Yoke should start moving: ${first}`);
+  assert.ok(physics.controls.aileron > 0.14, `Held input should reach deflection: ${physics.controls.aileron}`);
+  assert.equal(physics.controlEffectiveness.aileron, 1);
+});
+
+test('manual reversion centers on release and accepts a second held input', () => {
+  const physics = createChallengePhysics();
+  physics.setAutopilot(false);
+  physics.failureSystem.triggerFailure('hydraulic_failure');
+  const controls = createControls({ current: physics });
+  for (const direction of [0.3, -0.3, 0.3]) {
+    controls.setRoll(direction);
+    for (let index = 0; index < 90; index++) physics.update(controls.getControls(), 1 / 60);
+    assert.ok(physics.controls.aileron * direction > 0);
+    controls.setRoll(0);
+    physics.update(controls.getControls(), 1 / 60);
+    assert.equal(physics.controls.aileron, 0);
+  }
+});
