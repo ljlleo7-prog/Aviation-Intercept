@@ -10,6 +10,21 @@ The app retains bundled AIP CSVs for its existing local route fallback. Optional
 
 Rebuild changed data with `npm run build:aip-packs` and `npm run build:scenery-packs` before staging. Keep AIP source overrides and pack catalogs in Git. Retain the combined scenery ZIP as a bootstrap input until a durable external source archive is arranged: a fresh checkout without ignored scenery-source staging needs that ZIP to rebuild offline. Do not broadly ignore all ZIPs yet.
 
+## Pack download links
+
+Upload `aip-packs/world-aip-1.1.0.zip` and `scenery-packs/major-hubs-1.0.0.zip` as assets on a published release in a public GitHub repository. Copy the asset download links, not GitHub's automatically generated source-code ZIP links.
+
+For the GitHub Pages workflow, open repository **Settings → Secrets and variables → Actions → Variables**, and add these repository variables:
+
+```dotenv
+VITE_AIP_PACK_DOWNLOAD_URL=https://github.com/OWNER/REPO/releases/download/packs-v1.0/world-aip-1.1.0.zip
+VITE_SCENERY_PACK_DOWNLOAD_URL=https://github.com/OWNER/REPO/releases/download/packs-v1.0/major-hubs-1.0.0.zip
+```
+
+Replace the example URLs with your uploaded asset links. For local builds, paste the same values into `.env.local`; for other deployment services, set them as build environment variables. These URLs are public and must not contain credentials. Rebuild after changing them: Vite embeds the values at build time. The manual Pages workflow passes both repository variables to the build.
+
+Each configured link appears in its Settings section and opens separately so the simulator stays open. Users download the ZIP, import it using the corresponding file picker, then reload. Blank values hide the corresponding download link; manual import remains available. Use the combined scenery ZIP for a single scenery download containing all optional regions.
+
 See [AIP pack instructions](../aip-packs/README.md), [scenery pack instructions](../scenery-packs/README.md), and the [remaining checklist](PRE_RELEASE_CLEANUP_CHECKLIST.md). Cloud migrations, DNS, authentication redirect configuration, browser playthroughs, and production download-link validation remain release work; cleanup does not apply migrations or change live services.
 
 ## Cleanup decisions

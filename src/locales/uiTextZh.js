@@ -14,6 +14,7 @@ export default {
   "AIP data saved. Reload the simulator to apply changes.": "AIP 数据已保存。请重新加载模拟器以应用更改。",
   "Import AIP ZIP": "导入 AIP ZIP",
   "Download World AIP ZIP": "下载全球 AIP ZIP",
+  "Download scenery ZIP": "下载机场场景 ZIP",
   "Processing AIP data…": "正在处理 AIP 数据…",
   "No optional AIP data pack installed.": "尚未安装可选 AIP 数据包。",
 

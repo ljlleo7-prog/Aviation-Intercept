@@ -16,6 +16,9 @@ jobs:
       - run: npm test
       - run: npm run test:aip-route-search
       - run: npm run build:local-aip
+        env:
+          VITE_AIP_PACK_DOWNLOAD_URL: ${{ vars.VITE_AIP_PACK_DOWNLOAD_URL }}
+          VITE_SCENERY_PACK_DOWNLOAD_URL: ${{ vars.VITE_SCENERY_PACK_DOWNLOAD_URL }}
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

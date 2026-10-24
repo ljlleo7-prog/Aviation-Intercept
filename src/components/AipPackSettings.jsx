@@ -5,7 +5,7 @@ import { listAipPacks, removeAipPack } from '../services/aipPackStorage.js';
 
 export default function AipPackSettings() {
   const { tx } = useLanguage();
-  const downloadUrl = import.meta.env.VITE_AIP_PACK_DOWNLOAD_URL;
+  const downloadUrl = import.meta.env.VITE_AIP_PACK_DOWNLOAD_URL?.trim();
   const [packs, setPacks] = useState([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -28,7 +28,7 @@ export default function AipPackSettings() {
     <h4>{tx('AIP data packs')}</h4>
     <p>{tx('Import the World AIP ZIP to store airports, runways, frequencies, navaids, and routes in this browser. Installed data is used before cloud lookups and costs no credits.')}</p>
     <p>{tx('Cloud AIP requests require login and cost 1 credit per request, with a shared quota of 10 requests per minute. Cached results cost no additional credits.')}</p>
-    {downloadUrl && <a href={downloadUrl} download>{tx('Download World AIP ZIP')}</a>}
+    {downloadUrl && <p><a href={downloadUrl} target="_blank" rel="noreferrer">{tx('Download World AIP ZIP')}</a></p>}
     <label>{tx('Import AIP ZIP')}
       <input type="file" accept=".zip,application/zip" disabled={busy} onChange={event => {
         const file = event.target.files?.[0];

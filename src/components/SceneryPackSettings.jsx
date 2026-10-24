@@ -5,6 +5,7 @@ import { listSceneryPacks, removeSceneryPack } from '../services/sceneryPackStor
 
 export default function SceneryPackSettings() {
   const { tx } = useLanguage();
+  const downloadUrl = import.meta.env.VITE_SCENERY_PACK_DOWNLOAD_URL?.trim();
   const [packs, setPacks] = useState([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -27,6 +28,7 @@ export default function SceneryPackSettings() {
   return <section className="settings-section" aria-busy={busy}>
     <h4>{tx('Scenery packs')}</h4>
     <p>{tx('Download a scenery ZIP, then import it here. Installed packs are stored in this browser. Bundled scenery remains available.')}</p>
+    {downloadUrl && <p><a href={downloadUrl} target="_blank" rel="noreferrer">{tx('Download scenery ZIP')}</a></p>}
     <label>{tx('Import scenery ZIP')}
       <input ref={input} type="file" accept=".zip,application/zip" disabled={busy} onChange={event => {
         const file = event.target.files?.[0];
