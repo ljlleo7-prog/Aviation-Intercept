@@ -8,7 +8,13 @@ export const ROUTE_CACHE_MAX_ENTRIES = 24;
 export const REFERENCE_CACHE_MAX_ENTRIES = 36;
 export const NEGATIVE_ROUTE_TTL_MS = 60 * 1000;
 
-const hasLocalStorage = () => typeof window !== 'undefined' && Boolean(window.localStorage);
+const hasLocalStorage = () => {
+  try { return typeof window !== 'undefined' && Boolean(window.localStorage); }
+  catch { return false; }
+};
+const isManagedKey = key => [ROUTE_CACHE_PREFIX, REFERENCE_CACHE_PREFIX, NEGATIVE_CACHE_PREFIX].some(prefix => key.startsWith(prefix));
+// Avoid persisting large diagnostic payloads in browser storage.
+const MAX_CACHE_ENTRY_CHARS = 256 * 1024;
 
 const safeJsonParse = (raw) => {
   try {
@@ -29,14 +35,20 @@ const getStorageKeys = () => {
 
 const getEntry = (key, ttlMs, valueKey) => {
   if (!hasLocalStorage() || !key) return null;
-  const entry = safeJsonParse(window.localStorage.getItem(key));
-  if (!entry?.timestamp || !Object.prototype.hasOwnProperty.call(entry, valueKey)) return null;
-  if (Date.now() - entry.timestamp > ttlMs) {
-    window.localStorage.removeItem(key);
+  try {
+    const entry = safeJsonParse(window.localStorage.getItem(key));
+    if (!entry?.timestamp || !Object.prototype.hasOwnProperty.call(entry, valueKey)) return null;
+    if (Date.now() - entry.timestamp > ttlMs) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    // A failed LRU touch must not turn a valid cached route into a failure.
+    try { window.localStorage.setItem(key, JSON.stringify({ ...entry, lastAccessed: Date.now() })); }
+    catch { /* Cache reads remain useful when storage is full or read-only. */ }
+    return entry[valueKey];
+  } catch {
     return null;
   }
-  window.localStorage.setItem(key, JSON.stringify({ ...entry, lastAccessed: Date.now() }));
-  return entry[valueKey];
 };
 
 const pruneCache = (prefix, maxEntries) => {
@@ -56,12 +68,29 @@ const pruneCache = (prefix, maxEntries) => {
 
 const setEntry = (key, valueKey, value, prefix, maxEntries) => {
   if (!hasLocalStorage() || !key || value == null) return;
-  window.localStorage.setItem(key, JSON.stringify({
-    timestamp: Date.now(),
-    lastAccessed: Date.now(),
-    [valueKey]: value
-  }));
-  pruneCache(prefix, maxEntries);
+  try {
+    const serialized = JSON.stringify({ timestamp: Date.now(), lastAccessed: Date.now(), [valueKey]: value });
+    if (serialized.length > MAX_CACHE_ENTRY_CHARS) return;
+    // Make room before writing; pruning afterwards is too late when already full.
+    pruneCache(prefix, maxEntries - (window.localStorage.getItem(key) === null ? 1 : 0));
+    try { window.localStorage.setItem(key, serialized); return; }
+    catch (error) {
+      if (!['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(error?.name) && error?.code !== 22) return;
+    }
+    const entries = getStorageKeys().filter(isManagedKey).map(cacheKey => {
+      const entry = safeJsonParse(window.localStorage.getItem(cacheKey));
+      return { key: cacheKey, accessed: entry?.lastAccessed || entry?.timestamp || 0 };
+    }).sort((a, b) => a.accessed - b.accessed);
+    for (const entry of entries) {
+      window.localStorage.removeItem(entry.key);
+      try { window.localStorage.setItem(key, serialized); return; }
+      catch (error) {
+        if (!['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(error?.name) && error?.code !== 22) return;
+      }
+    }
+  } catch {
+    // Caching is optional. Storage/serialization errors must never abort route creation.
+  }
 };
 
 const sanitizeReference = (reference = {}) => ({
@@ -87,7 +116,10 @@ export const buildRouteCacheKey = ({ provider = 'route', departure, arrival, air
   const optionKey = JSON.stringify({
     aircraftType,
     includeSidStar: options.includeSidStar !== false,
-    routeVersion: ROUTE_CACHE_VERSION
+    routeVersion: ROUTE_CACHE_VERSION,
+    installedAip: options.installedAip || null,
+    aipProviderMode: options.aipProviderMode || options.localAip?.providerMode || options.supabaseAip?.providerMode || 'local-only',
+    localAip: options.localAip || null
   });
   return `${ROUTE_CACHE_PREFIX}${provider}:${dep}:${arr}:${authState}:${optionKey}`;
 };
@@ -149,7 +181,7 @@ export const setCachedReferenceData = (key, referenceData) => {
 
 export const clearRouteCache = () => {
   if (!hasLocalStorage()) return;
-  getStorageKeys()
-    .filter((key) => key.startsWith(ROUTE_CACHE_PREFIX) || key.startsWith(REFERENCE_CACHE_PREFIX) || key.startsWith(NEGATIVE_CACHE_PREFIX))
-    .forEach((key) => window.localStorage.removeItem(key));
+  try {
+    getStorageKeys().filter(isManagedKey).forEach(key => window.localStorage.removeItem(key));
+  } catch { /* Browser storage may be disabled. */ }
 };

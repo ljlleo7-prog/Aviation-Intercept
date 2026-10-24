@@ -1,12 +1,18 @@
 import { createCockpitControlPointer } from '../utils/cockpitControlPointer.js';
-import { useEffect, useId, useRef, useState } from 'react';
+import { memo, useEffect, useId, useRef } from 'react';
+import { pilotControlVisuals, paintPilotControls } from '../utils/pilotControlVisuals.js';
+import { hasMechanicalFeedback } from '../services/physics/controlTransmission.js';
 import PropTypes from 'prop-types';
 import './CockpitPilotControls.css';
 import { subscribeKeyboardControls } from '../utils/flightKeyboardVisuals.js';
 
-export default function CockpitPilotControls({ flightState, onAction, isAirbus = false, overlay = false }) {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [pedals, setPedals] = useState({ rudder: 0, left: 0, right: 0 });
+function CockpitPilotControls({ flightState, onAction, physicsService, isAirbus = false, overlay = false }) {
+  const demand = useRef({ x: 0, y: 0, rudder: 0, left: 0, right: 0 });
+  const root = useRef(null);
+  const position = demand.current;
+  const pedals = demand.current;
+  const setPosition = value => Object.assign(demand.current, value);
+  const setPedals = value => Object.assign(demand.current, typeof value === 'function' ? value(demand.current) : value);
   const pointer = useRef(null);
   const inputs = useRef({ rudder: { left: 0, right: 0 }, brakes: { left: 0, right: 0 } });
   const actions = useRef(onAction);
@@ -14,11 +20,26 @@ export default function CockpitPilotControls({ flightState, onAction, isAirbus =
   // Demand moves an unlinked sidestick; linked yokes/pedals follow the actual
   // slow or jammed mechanism published by physics, regardless of input device.
   const feedback = flightState.controlFeedback?.mechanical ?? !isAirbus;
-  const visiblePosition = feedback && flightState.controls ? {
-    x: Math.max(-1, Math.min(1, (flightState.controls.roll ?? 0) / 0.3)),
-    y: Math.max(-1, Math.min(1, (flightState.controls.pitch ?? 0) / 0.3))
-  } : position;
-  const visibleRudder = feedback && flightState.controls ? (flightState.controls.yaw ?? 0) : pedals.rudder;
+  const visiblePosition = pilotControlVisuals(flightState.controls, demand.current, feedback);
+  const visibleRudder = visiblePosition.rudder;
+  const live = useRef(null);
+  live.current = { flightState, physicsService, feedback, isAirbus };
+  const paint = () => {
+    const { flightState: state, physicsService: service, feedback: linked, isAirbus: airbus } = live.current;
+    const controls = service?.controls ? {
+      pitch: service.controls.elevator, roll: service.controls.aileron, yaw: service.controls.rudder
+    } : state.controls;
+    const mechanical = service ? hasMechanicalFeedback(service.aircraft) : linked;
+    paintPilotControls(root.current, pilotControlVisuals(controls, demand.current, mechanical), airbus);
+  };
+  const paintRef = useRef(paint);
+  paintRef.current = paint;
+  useEffect(() => {
+    let frame;
+    const animate = () => { paintRef.current(); frame = requestAnimationFrame(animate); };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const gradient = useId();
   const disabled = !onAction || flightState.hasCrashed;
   const autopilotEngaged = typeof flightState.autopilot === 'object'
@@ -28,11 +49,13 @@ export default function CockpitPilotControls({ flightState, onAction, isAirbus =
   useEffect(() => subscribeKeyboardControls(({ pitch, roll, yaw, toeBrakes }) => {
     setPosition({ x: roll / 0.3, y: pitch / 0.3 });
     setPedals({ rudder: yaw, left: toeBrakes, right: toeBrakes });
+    paintRef.current();
   }), []);
   const neutral = () => {
     setPosition({ x: 0, y: 0 });
     actions.current?.('pitch', 0);
     actions.current?.('roll', 0);
+    paintRef.current();
   };
   useEffect(() => {
     if (locked) {
@@ -58,6 +81,7 @@ export default function CockpitPilotControls({ flightState, onAction, isAirbus =
     setPosition({ x, y });
     actions.current?.('pitch', y * 0.3);
     actions.current?.('roll', x * 0.3);
+    paintRef.current();
   }, neutral);
   const pedal = (kind, side, value) => {
     inputs.current[kind][side] = value;
@@ -112,7 +136,7 @@ export default function CockpitPilotControls({ flightState, onAction, isAirbus =
       <ellipse cx="80" cy="180" rx="45" ry="18" fill="#17232a" stroke="#7b878b" strokeWidth="2"/>
       <path d="M54 178 62 151H98L106 178Q80 191 54 178Z" fill="#222d32" stroke="#10191e" strokeWidth="2"/>
       <path d="M59 172Q80 181 101 172M61 165Q80 173 99 165M63 158Q80 165 97 158" fill="none" stroke="#465158" strokeWidth="3"/>
-      <g className="sidestick-moving" style={{ transform: `perspective(420px) rotateX(${-visiblePosition.y * 24}deg) rotateZ(${visiblePosition.x * 20}deg)`, transformOrigin: '80px 174px', transformBox: 'view-box' }}>
+      <g data-control-grip="" className="sidestick-moving" style={{ transform: `perspective(420px) rotateX(${-visiblePosition.y * 24}deg) rotateZ(${visiblePosition.x * 20}deg)`, transformOrigin: '80px 174px', transformBox: 'view-box' }}>
         <path d="M72 174 69 105H91L88 174Z" fill={`url(#${gradient}-${seat})`} stroke="#111a1e" strokeWidth="2"/>
         <path d={seat === 'captain' ? 'M69 127 59 60Q50 28 72 24L97 30Q110 35 104 57L94 125Z' : 'M91 127 101 60Q110 28 88 24L63 30Q50 35 56 57L66 125Z'} fill={`url(#${gradient}-${seat})`} stroke="#10191e" strokeWidth="3"/>
         <path d="M66 67 96 72M67 78 95 83M69 89 93 94" fill="none" stroke="#111a1d" strokeWidth="5" strokeLinecap="round"/>
@@ -120,8 +144,8 @@ export default function CockpitPilotControls({ flightState, onAction, isAirbus =
         <path d="M72 31 85 34" stroke="#a3adaa" strokeWidth="2" strokeLinecap="round"/>
       </g>
     </> : <>
-    <path d={`M88 ${87 + visiblePosition.y * 15}h24l7 100H81Z`} fill={`url(#${gradient}-${seat})`} stroke="#111a1e" strokeWidth="2"/>
-    <g transform={`translate(0 ${visiblePosition.y * 15}) rotate(${visiblePosition.x * 40} 100 80)`}>
+    <path data-control-shaft="" d={`M88 ${87 + visiblePosition.y * 15}h24l7 100H81Z`} fill={`url(#${gradient}-${seat})`} stroke="#111a1e" strokeWidth="2"/>
+    <g data-control-grip="" transform={`translate(0 ${visiblePosition.y * 15}) rotate(${visiblePosition.x * 40} 100 80)`}>
         <path d="M100 115V80M100 80Q42 90 28 62L20 24M100 80Q158 90 172 62L180 24" fill="none" stroke="#101619" strokeWidth="25" strokeLinecap="round"/>
         <path d="M100 115V80M100 80Q42 90 28 62L20 24M100 80Q158 90 172 62L180 24" fill="none" stroke={`url(#${gradient}-${seat})`} strokeWidth="19" strokeLinecap="round"/>
         <path d="m17 28 9-2m-8 11 9-2m-7 11 9-2m147-18 9 2m-10 7 9 2m-11 7 9 2" stroke="#11191b" strokeWidth="3"/>
@@ -133,9 +157,9 @@ export default function CockpitPilotControls({ flightState, onAction, isAirbus =
   </svg>;
   const pedalAssembly = seat => <div className={`cockpit-pedals cockpit-pedals-${seat}`} role="group" aria-label={`${seat} rudder, nosewheel steering and toe brakes`}>
       <div className="pedal-linkage" aria-hidden="true"/>
-      {['left', 'right'].map(side => <div key={side} className={`cockpit-pedal cockpit-pedal-${side}`} style={{ transform: `translateY(${visibleRudder * (side === 'left' ? 9 : -9)}px)` }}>
+      {['left', 'right'].map(side => <div key={side} data-control-pedal={side} className={`cockpit-pedal cockpit-pedal-${side}`} style={{ transform: `translateY(${visibleRudder * (side === 'left' ? 9 : -9)}px)` }}>
         <div className="pedal-piston" aria-hidden="true"/>
-        <button className="pedal-toe" disabled={disabled} aria-label={`${seat} ${side} toe brake (both main wheel brakes)`} title="Hold toe brake" style={{ transform: `perspective(100px) rotateX(${pedals[side] * -20}deg)` }} {...pedalEvents('brakes', side)}><span aria-hidden="true"/></button>
+        <button data-control-toe={side} className="pedal-toe" disabled={disabled} aria-label={`${seat} ${side} toe brake (both main wheel brakes)`} title="Hold toe brake" style={{ transform: `perspective(100px) rotateX(${pedals[side] * -20}deg)` }} {...pedalEvents('brakes', side)}><span aria-hidden="true"/></button>
         <button className="pedal-heel" disabled={rudderLocked} aria-label={`${seat} ${side} rudder and ground steering`} title={`Hold ${side} rudder / nosewheel steering`} {...pedalEvents('rudder', side)}><span aria-hidden="true"/></button>
       </div>)}
       <svg className="rudder-position" viewBox="0 0 70 32" role="img" aria-label={`Actual rudder deflection ${((flightState.controls?.yaw ?? 0) * 180 / Math.PI).toFixed(0)} degrees`}>
@@ -143,9 +167,18 @@ export default function CockpitPilotControls({ flightState, onAction, isAirbus =
         <path d="M8 28h12m30 0h12" stroke="#687a70"/>
       </svg>
     </div>;
-  return <div className={`${overlay ? 'cockpit-pilot-overlay' : 'cockpit-pilot-side'} ${isAirbus ? 'has-sidesticks' : ''}`}>
+  return <div ref={root} className={`${overlay ? 'cockpit-pilot-overlay' : 'cockpit-pilot-side'} ${isAirbus ? 'has-sidesticks' : ''}`}>
     {control('captain')}{overlay && control('first-officer')}
     {pedalAssembly('captain')}{overlay && pedalAssembly('first-officer')}
   </div>;
 }
-CockpitPilotControls.propTypes = { flightState: PropTypes.object.isRequired, onAction: PropTypes.func, isAirbus: PropTypes.bool, overlay: PropTypes.bool };
+CockpitPilotControls.propTypes = { flightState: PropTypes.object.isRequired, onAction: PropTypes.func, physicsService: PropTypes.object, isAirbus: PropTypes.bool, overlay: PropTypes.bool };
+
+export default memo(CockpitPilotControls, (previous, next) => {
+  if (!next.physicsService) return false;
+  return previous.physicsService === next.physicsService && previous.onAction === next.onAction &&
+    previous.isAirbus === next.isAirbus && previous.overlay === next.overlay &&
+    previous.flightState.hasCrashed === next.flightState.hasCrashed &&
+    previous.flightState.autopilot === next.flightState.autopilot &&
+    previous.flightState.onGround === next.flightState.onGround;
+});

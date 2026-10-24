@@ -12,7 +12,7 @@ const OutsideFlightScene = lazy(() => import('./OutsideFlightScene.jsx'));
 
 export default function OutsideFlightView({ flightData, weatherData, timeZulu, timeScale, quality = 'balanced', departure, arrival, departureRunway, arrivalRunway }) {
   const { tx } = useLanguage();
-  const visual = cockpitVisualState(flightData?.systems, weatherData);
+  const visual = cockpitVisualState(flightData?.systems, weatherData, flightData?.derived?.altitude_ft ?? flightData?.altitude);
   const position = flightData?.position;
   const distanceSq = (airport) => airport && Number.isFinite(position?.latitude) && Number.isFinite(position?.longitude)
     ? (position.latitude - airport.latitude) ** 2 + ((position.longitude - airport.longitude) * Math.cos(position.latitude * Math.PI / 180)) ** 2

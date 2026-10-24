@@ -1,4 +1,7 @@
 import { generateGate, generateSID, generateSTAR, generateTaxiway, getLastProcedureWaypoint, getRunways, getRunwayHeading } from './routeGenerator.js';
+import { applyProcedureEdits, validProcedureEdit, procedureEndpoint, interceptPoint } from './procedureEditor.js';
+import { airportService } from '../services/airportService.js';
+import { activateFlightRoute, getActiveWaypoints } from '../services/activeFlightPlan.js';
 
 export const DEFAULT_ROUTE_DETAILS = {
   departureGate: '',
@@ -108,6 +111,8 @@ export const normalizeRouteDetails = (routeDetails, selectedDeparture, selectedA
 
   return {
     ...normalized,
+    departureProcedure: validProcedureEdit(normalized.departureProcedure, normalized.departureRunway, selectedDeparture),
+    arrivalProcedure: validProcedureEdit(normalized.arrivalProcedure, normalized.landingRunway, selectedArrival),
     waypoints: finalWaypoints,
     routeObject,
     routeSource: normalized.routeSource || routeObject?.source || '',
@@ -134,9 +139,52 @@ export const mergeFlightPlanWithRoute = (flightPlan, routeDetails) => {
     } : null
   } : null;
 
-  return {
+  const base = normalizedRoute?.waypoints?.length ? normalizedRoute.waypoints : getActiveWaypoints(flightPlan).map(normalizeWaypoint).filter(Boolean);
+  const resolveAirport = supplied => ({ ...airportService.getAirportByCode(supplied?.icao || supplied?.iata || supplied?.airport), ...supplied });
+  const departureAirport = resolveAirport(flightPlan.departure);
+  const arrivalAirport = resolveAirport(flightPlan.arrival);
+  const selectedEdit = (side) => {
+    const departure = side === 'departure';
+    const airport = departure ? departureAirport : arrivalAirport;
+    const runway = departure ? normalizedRoute?.departureRunway : normalizedRoute?.landingRunway;
+    const name = departure ? normalizedRoute?.sid : normalizedRoute?.star;
+    const edit = validProcedureEdit(departure ? normalizedRoute?.departureProcedure : normalizedRoute?.arrivalProcedure, runway, airport);
+    if (edit && base.some(point => point.latitude === edit.endpoint?.latitude && point.longitude === edit.endpoint?.longitude)) return { ...edit, origin: edit.origin || (Number.isFinite(airport.latitude) && Number.isFinite(airport.longitude) ? airport : null) };
+    const published = (normalizedRoute?.procedureSegments || []).some(segment => (segment.kind || segment.segment) === (departure ? 'sid' : 'star') && segment.waypoints?.length);
+    if (published || !name || !runway || !Number.isFinite(airport.latitude) || !Number.isFinite(airport.longitude)) return null;
+    const endpoint = procedureEndpoint(base, airport, side);
+    if (!endpoint) return null;
+    const geometry = airportService.getRunwayGeometry(airport.icao || airport.iata, runway);
+    const origin = geometry?.thresholdStart || airport;
+    const heading = geometry?.heading ?? getRunwayHeading(runway);
+    return { endpoint, origin, runwayName: runway, airportCode: airport.icao || airport.iata,
+      points: [interceptPoint(origin, heading, departure ? 8 : 12, side)] };
+  };
+  let selectedWaypoints = base;
+  for (const kind of ['sid', 'star', 'approach']) {
+    const published = (normalizedRoute?.procedureSegments || []).filter(segment => (segment.kind || segment.segment) === kind)
+      .flatMap(segment => segment.waypoints || []).map(normalizeWaypoint).filter(Boolean).map(point => ({ ...point, segment: kind }));
+    if (!published.length) continue;
+    selectedWaypoints = selectedWaypoints.filter(point => point.segment !== kind);
+    const airport = kind === 'sid' ? departureAirport : arrivalAirport;
+    const endpoint = airport && procedureEndpoint(base, airport, kind === 'sid' ? 'departure' : 'arrival');
+    const boundary = endpoint ? selectedWaypoints.findIndex(point => point.latitude === endpoint.latitude && point.longitude === endpoint.longitude) : -1;
+    if (kind === 'sid') selectedWaypoints = [...published, ...selectedWaypoints.slice(Math.max(0, boundary))];
+    else if (kind === 'star') selectedWaypoints = [...selectedWaypoints.slice(0, boundary < 0 ? selectedWaypoints.length : boundary + 1), ...published];
+    else selectedWaypoints = [...selectedWaypoints.filter(point => !(airport && point.latitude === airport.latitude && point.longitude === airport.longitude)), ...published];
+  }
+  selectedWaypoints = applyProcedureEdits(selectedWaypoints, selectedEdit('departure'), selectedEdit('arrival'));
+  if (selectedWaypoints[0]?.segment === 'sid') {
+    const airport = departureAirport;
+    const origin = airportService.getRunwayGeometry(airport.icao || airport.iata, normalizedRoute?.departureRunway)?.thresholdStart || airport;
+    if (Number.isFinite(origin.latitude) && Number.isFinite(origin.longitude)) {
+      selectedWaypoints.unshift({ ...origin, name: normalizedRoute?.departureRunway || airport.icao || airport.iata, type: 'RUNWAY_FIX', segment: 'runway' });
+    }
+  }
+  selectedWaypoints = selectedWaypoints.filter((point, index, points) => index === 0 || point.latitude !== points[index - 1].latitude || point.longitude !== points[index - 1].longitude);
+  const merged = {
     ...flightPlan,
-    waypoints: normalizedRoute?.waypoints?.length ? normalizedRoute.waypoints : (flightPlan.waypoints || []).map(normalizeWaypoint).filter(Boolean),
+    waypoints: selectedWaypoints,
     routeObject: normalizedRoute?.routeObject || null,
     routeSource: normalizedRoute?.routeSource || normalizedRoute?.routeObject?.source || flightPlan.routeSource || '',
     routeSourceChain: normalizedRoute?.routeSourceChain || normalizedRoute?.routeObject?.sourceChain || flightPlan.routeSourceChain || [],
@@ -147,14 +195,15 @@ export const mergeFlightPlanWithRoute = (flightPlan, routeDetails) => {
     routeAlternatives: normalizedRoute?.routeAlternatives || normalizedRoute?.routeObject?.routeAlternatives || normalizedRoute?.routeObject?.metadata?.routeAlternatives || flightPlan.routeAlternatives || [],
     selectedRouteAlternativeId: normalizedRoute?.selectedRouteAlternativeId || normalizedRoute?.routeObject?.selectedRouteAlternativeId || normalizedRoute?.routeObject?.metadata?.selectedRouteAlternativeId || flightPlan.selectedRouteAlternativeId || '',
     departure: {
-      ...flightPlan.departure,
+      ...departureAirport,
       runways: normalizedRoute?.departureRunway ? [{ name: normalizedRoute.departureRunway }] : flightPlan.departure?.runways
     },
     arrival: {
-      ...flightPlan.arrival,
+      ...arrivalAirport,
       runways: normalizedRoute?.landingRunway ? [{ name: normalizedRoute.landingRunway }] : flightPlan.arrival?.runways
     }
   };
+  return activateFlightRoute(merged, selectedWaypoints);
 };
 
 export const buildRouteAuthState = ({ offlineMode = true, activeUser = null } = {}) => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { normalizeVisibilityM } from '../utils/outsideVisibility.js';
+import { outsideAtmosphere } from '../utils/outsideAtmosphere.js';
 import * as THREE from 'three';
 import { terrainRadarService } from '../services/TerrainRadarService.js';
 import { nextAutoEconomy, outsideRenderBudget, outsideLightRanges } from '../utils/visualQualityPreference.js';
@@ -59,8 +59,44 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
     renderer.setPixelRatio(outsideRenderBudget(initialQuality, host.clientWidth, host.clientHeight, window.devicePixelRatio).pixelRatio);
     host.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x91aab1);
+    scene.background = new THREE.Color(0x89999f);
     scene.fog = new THREE.FogExp2(0xa7b5ae, 0.00013);
+    // Match distant terrain fog at the horizon, fading into the sky overhead.
+    const horizonMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        skyColor: { value: scene.background },
+        hazeColor: { value: scene.fog.color },
+        hazeStrength: { value: 0 }
+      },
+      vertexShader: `
+        varying vec3 skyDirection;
+        void main() {
+          skyDirection = position;
+          vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position = clip.xyww;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 skyColor;
+        uniform vec3 hazeColor;
+        uniform float hazeStrength;
+        varying vec3 skyDirection;
+        void main() {
+          float elevation = normalize(skyDirection).y;
+          float haze = 1.0 - smoothstep(-0.03, 0.22, elevation);
+          gl_FragColor = vec4(mix(skyColor, hazeColor, haze * hazeStrength), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false,
+      depthTest: false
+    });
+    const horizonSky = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), horizonMaterial);
+    horizonSky.frustumCulled = false;
+    horizonSky.renderOrder = -100;
+    scene.add(horizonSky);
     const hemi = new THREE.HemisphereLight(0xd5e8eb, 0x435139, 1.8);
     scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xffe7c3, 2);
@@ -268,8 +304,10 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
     };
     const streamTimer = window.setInterval(streamTerrain, 1200);
 
-    const daySky = new THREE.Color(0x91aab1); const nightSky = new THREE.Color(0x182536);
+    const daySky = new THREE.Color(0x89999f); const nightSky = new THREE.Color(0x182536);
     const dayFog = new THREE.Color(0xa7b5ae); const nightFog = new THREE.Color(0x273545);
+    const cruiseSky = new THREE.Color(0x2873c7); const cruiseFog = new THREE.Color(0x96bce3);
+    const atmosphereColor = new THREE.Color();
     let clockSource = null; let clockBase = new Date(); let clockStartedAt = performance.now();
     let lastLightUpdate = -Infinity;
     let daylight = 1;
@@ -337,8 +375,12 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
       const pitch = (state?.pitch ?? 0) * DEG;
       const roll = (state?.roll ?? 0) * DEG;
       camera.rotation.order = 'YXZ'; camera.rotation.set(pitch, -headingError, -roll);
-      const visual = cockpitVisualState(state?.systems, weather);
-      const visibilityM = Math.min(normalizeVisibilityM(weather?.visibility), visual.visibilityLimit);
+      const visual = cockpitVisualState(state?.systems, weather, mslFt);
+      const atmosphere = outsideAtmosphere(mslFt, weather);
+      const precipitationVisibility = Number.isFinite(visual.visibilityLimit)
+        ? visual.visibilityLimit + (80000 - visual.visibilityLimit) * atmosphere.cruiseBlend
+        : Infinity;
+      const visibilityM = Math.min(atmosphere.visibilityM, precipitationVisibility);
       lightRanges = outsideLightRanges(lightRanges, state?.derived?.altitude_agl_ft);
       taxiLight.visible = lightRanges.ground && visual.taxi;
       landingLight.visible = lightRanges.landing && visual.landing;
@@ -366,13 +408,18 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
         const visualTime = new Date(clockBase.getTime() + (now - clockStartedAt) * Math.max(1, scale || 1));
         const factor = daylightFactor(visualTime, geometry.airportLat, geometry.airportLon);
         daylight = factor;
-        scene.background.copy(nightSky).lerp(daySky, factor);
-        scene.fog.color.copy(nightFog).lerp(dayFog, factor);
-        hemi.intensity = .35 + 1.45 * factor;
-        sun.intensity = 2 * factor;
         renderer.toneMappingExposure = .75 + .3 * factor;
         lastLightUpdate = now;
       }
+      const groundLightScale = .85 + .15 * atmosphere.cruiseBlend;
+      hemi.intensity = .35 + 1.45 * daylight * groundLightScale;
+      sun.intensity = 2 * daylight * groundLightScale;
+      atmosphereColor.copy(daySky).lerp(cruiseSky, atmosphere.cruiseBlend);
+      scene.background.copy(nightSky).lerp(atmosphereColor, daylight);
+      atmosphereColor.copy(dayFog).lerp(cruiseFog, atmosphere.cruiseBlend);
+      scene.fog.color.copy(nightFog).lerp(atmosphereColor, daylight);
+      horizonSky.position.copy(camera.position);
+      horizonMaterial.uniforms.hazeStrength.value = 1 - THREE.MathUtils.smoothstep(visibilityM, 8000, 20000);
       const fingerprint = [position.latitude, position.longitude, mslFt, state?.heading, state?.pitch, state?.roll,
         visibilityM, source, daylight, aircraftLights.map(light => light.visible ? light.intensity : 0).join(','), effectiveQuality, enroute, sceneRevision].join(':');
       if (fingerprint === lastFingerprint) return;

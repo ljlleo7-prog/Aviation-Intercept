@@ -55,7 +55,7 @@ test('rejects a published route when an internal fix has no coordinates', async 
     lookup: ['XX,2605,AAAA,BBBB,BROKEN,BROKEN,1'],
     legs: ['BROKEN,1,FIXA,A1,HIDDEN,XX,2605', 'BROKEN,2,HIDDEN,A1,FIXB,XX,2605'],
     points: [point('1', 'XX', 'FIXA', 0, 1), point('2', 'XX', 'FIXB', 0, 9)]
-  }, { icao: 'AAAA', latitude: 0, longitude: 0 }, { icao: 'BBBB', latitude: 0, longitude: 10 }, { maxConnectorNm: 1000 });
+  }, { icao: 'AAAA', latitude: 0, longitude: 0 }, { icao: 'BBBB', latitude: 0, longitude: 10 }, { maxConnectorNm: 1000, allowWaypointFallback: false });
 
   assert.equal(result.status, 'unavailable');
 });
@@ -85,4 +85,21 @@ test('segments an international-to-China socket connector into explicit DCT legs
   for (let index = 0; index < result.route.waypoints.length - 1; index += 1) {
     assert.ok(calculateGreatCircleNm(result.route.waypoints[index], result.route.waypoints[index + 1]) <= 601);
   }
+});
+
+test('preview waypoint search routes airport pairs without indexed sockets using measured fixes', async () => {
+  const points = [point('DEP', 'XX', 'TEST', 0, 0), point('ARR', 'XX', 'DEST', 0, 30)];
+  for (let i = 1; i < 15; i++) points.push(point(`P${i}`, 'XX', `FIX${String(i).padStart(2, '0')}`, 0, i * 2));
+  const response = await search({ points }, { icao: 'TEST', latitude: 0, longitude: 0 }, { icao: 'DEST', latitude: 0, longitude: 30 }, { useBruteForceFallback: true, useGraphFallback: true });
+  assert.equal(response.status, 'ok');
+  const route = response.route;
+  assert.ok(route.waypoints.some(w => w.name.startsWith('FIX')));
+  assert.ok(route.waypoints.every(w => w.latitude === 0 && Number.isInteger(w.longitude / 2)));
+  assert.ok(response.routeAlternatives.every(candidate => candidate.family === 'relaxed'));
+  assert.ok(response.routeAlternatives.every(candidate => candidate.legs.every(leg => leg.airway === 'DCT')));
+});
+
+test('waypoint fallback can be disabled when published airway routes are required', async () => {
+  const response = await search({ points: [point('DEP', 'XX', 'TEST', 0, 0), point('ARR', 'XX', 'DEST', 0, 30)] }, { icao: 'TEST', latitude: 0, longitude: 0 }, { icao: 'DEST', latitude: 0, longitude: 30 }, { useBruteForceFallback: true, allowWaypointFallback: false });
+  assert.equal(response.status, 'unavailable');
 });

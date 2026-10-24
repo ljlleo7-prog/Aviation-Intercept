@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cockpitVisualState, daylightFactor, parseZuluTime } from '../src/utils/cockpitVisualState.js';
 
+test('rain fades between 8000 and 12000 feet without changing reported weather', () => {
+  const weather = { weatherCode: 63, precipitation: 3 };
+  const low = cockpitVisualState({}, weather, 8000);
+  const middle = cockpitVisualState({}, weather, 10000);
+  const high = cockpitVisualState({}, weather, 12000);
+  assert.equal(middle.intensity, low.intensity / 2);
+  assert.ok(middle.visibilityLimit > low.visibilityLimit);
+  assert.equal(high.intensity, 0);
+  assert.equal(high.visibilityLimit, Infinity);
+  assert.equal(cockpitVisualState({}, weather, 35000).intensity, 0);
+  assert.equal(weather.precipitation, 3);
+});
+
 const switches = { taxi: true, landing: true, beacon: true, nav: true, strobe: true, panel: true, dome: true };
 test('power loss blanks displays and stops lights and wipers despite switch positions', () => {
   const state = cockpitVisualState({ electrical: { dcVolts: 0, acVolts: 0 }, lighting: switches, wipers: { left: true, right: true } });

@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, startTransition } from 'react';
+import { mergeFlightPlanWithRoute } from '../utils/routeDetails.js';
+import { activateFlightRoute } from '../services/activeFlightPlan.js';
 import useFlightKeyboard from '../hooks/useFlightKeyboard.js';
 import { flightKeyboardHelp } from '../config/flightKeyboard.js';
 import { useAircraftPhysics } from '../hooks/useAircraftPhysics';
@@ -10,6 +12,7 @@ import { terrainRadarService } from '../services/TerrainRadarService';
 import { airportService } from '../services/airportService';
 import weatherConfig from '../config/weatherConfig.json';
 import FlightPanelModular from './FlightPanelModular';
+import FlightStatusSummary from './FlightStatusSummary.jsx';
 import OutsideFlightView from './OutsideFlightView';
 import { readVisualQuality, writeVisualQuality } from '../utils/visualQualityPreference.js';
 import DebugPhysicsPanel from './DebugPhysicsPanel';
@@ -265,9 +268,10 @@ const FlightInProgress = ({
       }
   }
 
-  const activeRouteWaypoints = (Array.isArray(routeDetails?.waypoints) && routeDetails.waypoints.length > 0)
-    ? routeDetails.waypoints
-    : (Array.isArray(flightPlan?.waypoints) ? flightPlan.waypoints : []);
+  const plannedFlightPlan = useMemo(() => mergeFlightPlanWithRoute({ ...(flightPlan || {}),
+    departure: selectedDeparture || flightPlan?.departure, arrival: selectedArrival || flightPlan?.arrival
+  }, routeDetails), [flightPlan, routeDetails, selectedDeparture, selectedArrival]);
+  const activeRouteWaypoints = plannedFlightPlan.waypoints;
 
   const aircraftConfig = useMemo(() => ({
     initialSave,
@@ -454,7 +458,6 @@ const FlightInProgress = ({
     );
   }, [physicsState]);
 
-  const [phaseName, setPhaseName] = useState('');
   const [showDebugPhysics, setShowDebugPhysics] = useState(false);
   const [showFailurePanel, setShowFailurePanel] = useState(false);
   const [isChannelBusy, setIsChannelBusy] = useState(false);
@@ -469,10 +472,7 @@ const FlightInProgress = ({
   const [visualQuality, setVisualQuality] = useState(readVisualQuality);
   const [playerSettingsError, setPlayerSettingsError] = useState(null);
   const [playerSettingsLoaded, setPlayerSettingsLoaded] = useState(false);
-  const [activeFlightPlan, setActiveFlightPlan] = useState(() => ({
-    ...(flightPlan || {}),
-    waypoints: activeRouteWaypoints
-  }));
+  const [activeFlightPlan, setActiveFlightPlan] = useState(() => plannedFlightPlan);
   const [autoSaveStatus, setAutoSaveStatus] = useState({
     isSaving: false,
     lastSavedAt: null,
@@ -561,7 +561,6 @@ const FlightInProgress = ({
     }
 
     setNarrative(null);
-    setPhaseName(activeChallenge ? 'Challenge' : 'Tutorial');
     setActiveFailures([]);
     const scenarioSceneState = {
       scenarioId: activeScenario?.id || null,
@@ -847,13 +846,13 @@ const FlightInProgress = ({
   useEffect(() => {
     // Only update if the plan actually changed content-wise to prevent object identity loops
     setActiveFlightPlan(prev => {
-        const planningPlan = { ...(flightPlan || {}), waypoints: activeRouteWaypoints };
+        const planningPlan = plannedFlightPlan;
         if (JSON.stringify(prev) !== JSON.stringify(planningPlan)) {
             return planningPlan;
         }
         return prev;
     });
-  }, [flightPlan, activeRouteWaypoints]);
+  }, [plannedFlightPlan]);
   
   // Handle Flight Plan Update
    const handleUpdateFlightPlan = (newPlan) => {
@@ -861,10 +860,7 @@ const FlightInProgress = ({
 
      let updatedPlanObject;
      if (Array.isArray(newPlan)) {
-         updatedPlanObject = {
-             ...(activeFlightPlan || {}),
-             waypoints: newPlan
-         };
+         updatedPlanObject = activateFlightRoute(activeFlightPlan, newPlan, physicsState?.currentWaypointIndex ?? 0);
      } else {
          updatedPlanObject = newPlan;
      }
@@ -1005,7 +1001,6 @@ const FlightInProgress = ({
     },
     [eventBus.Types.PHASE_CHANGED]: (payload) => {
       const phase = payload?.phase;
-      setPhaseName(phase?.name || '');
       if (phase?.narrative) {
         setNarrative(phase.narrative);
       }
@@ -1706,13 +1701,21 @@ const FlightInProgress = ({
               marginBottom: '4px'
             }}
           >
-            {phaseName || 'Situation'}
+            {callsign} · {aircraftModel}
           </div>
           
-          {/* Conditional Rendering: Only show narrative in Header if Physics is ACTIVE (PHY-ON) 
-              In PHY-OFF mode, narrative is shown in the immersive full-screen view.
-              Also show if there is a warning/critical message (e.g. checklist blocked) */}
-          {(sceneState.physicsActive || narrative?.severity === 'warning' || narrative?.severity === 'critical') && (
+          <div style={{ fontSize: '18px', fontWeight: 600, color: '#E5E7EB', marginBottom: '8px' }}>
+            {selectedDeparture?.icao || selectedDeparture?.iata || '—'} → {selectedArrival?.icao || selectedArrival?.iata || '—'}
+          </div>
+
+          <FlightStatusSummary
+            flightData={flightData}
+            flightPlan={activeFlightPlan}
+            arrivalRunway={routeDetails?.landingRunway || flightPlan?.arrival?.runways?.[0]?.name}
+          />
+
+          {/* Ordinary flights have continuous physics, not the legacy scripted phases. */}
+          {narrative && (isDirectScenarioMode || sceneProgressionEnabled || narrative.severity === 'warning' || narrative.severity === 'critical') && (
             <>
               <div
                 style={{
@@ -1722,7 +1725,7 @@ const FlightInProgress = ({
                   marginBottom: '4px'
                 }}
               >
-                {narrative?.title || 'Awaiting flight instructions...'}
+                {narrative.title}
               </div>
               <div
                 style={{
@@ -1732,7 +1735,7 @@ const FlightInProgress = ({
                   marginBottom: '8px'
                 }}
               >
-                {narrative?.content || 'Prepare for takeoff.'}
+                {narrative.content}
               </div>
             </>
           )}

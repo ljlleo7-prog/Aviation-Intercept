@@ -33,8 +33,14 @@ export const listAipPacks = () => transaction('readonly', (store, done) => {
 export const readAipPack = () => transaction('readonly', (store, done) => {
   store.get('world-aip').onsuccess = event => done(event.target.result || null);
 });
-export const saveAipPack = pack => transaction('readwrite', store => store.put(pack));
-export const removeAipPack = () => transaction('readwrite', store => store.delete('world-aip'));
+export const saveAipPack = async pack => {
+  await transaction('readwrite', store => store.put(pack));
+  snapshot = Promise.resolve(pack);
+};
+export const removeAipPack = async () => {
+  await transaction('readwrite', store => store.delete('world-aip'));
+  snapshot = Promise.resolve(null);
+};
 
 let snapshot;
 export function loadInstalledAipPack() {

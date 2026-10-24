@@ -1,3 +1,4 @@
+import { hasManualReversion, hydraulicAssistAvailable } from '../services/physics/controlTransmission.js';
 import { useEffect, useRef, useState } from 'react';
 import aircraftService from '../services/aircraftService';
 import { publishKeyboardControl } from '../utils/flightKeyboardVisuals.js';
@@ -25,6 +26,9 @@ export default function useFlightKeyboard({ aircraftModel, physicsService, enabl
     getState: () => {
       const { physicsService: service, enabled: ready, maxFlaps: max, maxAirBrakes: maxBrakes } = latest.current;
       return {
+        immediateReleaseAxes: service && !hydraulicAssistAvailable(service.systems)
+          ? [['pitch', 'elevator'], ['roll', 'aileron'], ['yaw', 'rudder']]
+            .filter(([, axis]) => hasManualReversion(service.aircraft, axis)).map(([action]) => action) : [],
         enabled: ready, hasCrashed: service?.crashed,
         autopilot: service?.getAutopilotStatus?.()?.engaged, onGround: service?.onGround,
         gear: service?.controls?.gear > 0.5, flaps: service?.controls?.flaps ?? 0,

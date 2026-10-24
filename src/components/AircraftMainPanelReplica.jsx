@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { Children, useMemo } from 'react';
+import { Children, useCallback, useMemo, useRef } from 'react';
 import { resolveICAO } from '../data/aircraft/index.js';
 import { Replica as B737Replica } from '../../previews/737-main-panel-replica.jsx';
 import { AircraftPanelGraphic } from '../../previews/main-panel-replicas.jsx';
@@ -20,8 +20,11 @@ const PANEL_BY_ICAO = {
 };
 const LEGACY_CENTRAL_PANELS = new Set(['737', '777', '320', '340']);
 
-export default function AircraftMainPanelReplica({ aircraftModel, flightState, flightPlan, npcs = [], onAutopilotAction, children }) {
+export default function AircraftMainPanelReplica({ aircraftModel, flightState, physicsService, flightPlan, npcs = [], onAutopilotAction, children }) {
   const { tx } = useLanguage();
+  const action = useRef(onAutopilotAction);
+  action.current = onAutopilotAction;
+  const handleControlAction = useCallback((...args) => action.current?.(...args), []);
   const panelKey = PANEL_BY_ICAO[resolveICAO(aircraftModel)];
   const airbusControls = ['320', '340', '350', '380'].includes(panelKey);
   const boeingControls = ['737', '747', '757', '777'].includes(panelKey);
@@ -92,7 +95,7 @@ export default function AircraftMainPanelReplica({ aircraftModel, flightState, f
     <div className="aircraft-main-panel-scroll">
       <div className={`aircraft-main-panel-stage aircraft-main-panel-stage-${panelKey}`}>
         {panelKey === '737' ? <B737Replica className="aircraft-panel-svg" instrumentData={instrumentData}/> : <AircraftPanelGraphic modelKey={panelKey} className="aircraft-panel-svg" instrumentData={instrumentData}/>} 
-        {(boeingControls || airbusControls) && <CockpitPilotControls flightState={flightState} onAction={onAutopilotAction} isAirbus={airbusControls} overlay/>}
+        {(boeingControls || airbusControls) && <CockpitPilotControls flightState={flightState} onAction={onAutopilotAction ? handleControlAction : undefined} physicsService={physicsService} isAirbus={airbusControls} overlay/>}
         {LEGACY_CENTRAL_PANELS.has(panelKey) && <div className="aircraft-main-panel-legacy-central">{legacyCentralPanel}</div>}
       </div>
     </div>
@@ -102,6 +105,7 @@ export default function AircraftMainPanelReplica({ aircraftModel, flightState, f
 AircraftMainPanelReplica.propTypes = {
   aircraftModel: PropTypes.string,
   flightState: PropTypes.object,
+  physicsService: PropTypes.object,
   flightPlan: PropTypes.oneOfType([PropTypes.array, PropTypes.object]),
   npcs: PropTypes.array,
   onAutopilotAction: PropTypes.func,

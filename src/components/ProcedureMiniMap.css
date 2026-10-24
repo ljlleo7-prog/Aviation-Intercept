@@ -1,0 +1,11 @@
+.procedure-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, 220px); gap: 12px; align-items: start; min-width: 0; }
+.procedure-editor-view { min-width: 0; background: #020617; border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
+.procedure-editor-view svg { display: block; width: 100%; aspect-ratio: 5 / 4; touch-action: none; user-select: none; }
+.procedure-editor-view small { display: block; padding: 6px 10px; color: #94a3b8; }
+.procedure-editor-list { min-width: 0; color: #cbd5e1; font-size: 12px; }
+.procedure-editor-list p { color: #94a3b8; line-height: 1.5; }
+.procedure-editor-list button { background: #172554; color: #dbeafe; border: 1px solid #334155; border-radius: 4px; padding: 4px 7px; cursor: pointer; }
+.procedure-editor-list button:disabled { opacity: .4; cursor: default; }
+.procedure-editor-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid #1e293b; }
+.procedure-editor-row span { flex: 1 1 100%; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .procedure-editor { grid-template-columns: minmax(0, 1fr); } }

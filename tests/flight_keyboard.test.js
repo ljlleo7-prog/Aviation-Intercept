@@ -44,8 +44,8 @@ test('held directions combine, cancel opposites, and release independently', () 
   assert.equal(values.yaw, -1);
   key('KeyS'); advance(2000); assert.equal(values.pitch, 0);
   key('KeyW', 'keyup'); advance(2000); assert.equal(values.pitch, 0.3);
-  key('KeyD', 'keyup'); assert.equal(values.roll, 0);
-  advance(100); assert.equal(values.roll, 0);
+  key('KeyD', 'keyup'); assert.equal(values.roll, 0.3);
+  advance(100); assert.ok(values.roll > 0 && values.roll < 0.3);
   advance(2000); assert.equal(values.roll, 0);
   detach(); assert.equal(values.pitch, 0); assert.equal(values.yaw, 0);
 });
@@ -118,10 +118,11 @@ test('S pulls and W pushes with frame-rate-independent easing and safe focus res
   key('KeyS');
   advance(100);
   assert.ok(values.pitch > 0 && values.pitch < 0.3);
+  const partial = values.pitch;
   key('KeyS', 'keyup');
-  assert.equal(values.pitch, 0);
+  assert.equal(values.pitch, partial);
   advance(100);
-  assert.equal(values.pitch, 0);
+  assert.ok(values.pitch > 0 && values.pitch < partial);
   key('KeyW');
   advance(500);
   assert.ok(values.pitch < 0 && values.pitch > -0.3);
@@ -169,4 +170,16 @@ test('Shift+R exits reverse even after holding minus to reverse idle', () => {
   state.throttle = values.throttle;
   key('Equal'); advance(1000);
   assert.ok(values.throttle > 0);
+});
+
+test('only manual-reversion axes center immediately when their key is released', () => {
+  const { key, state, values, advance } = setup();
+  state.immediateReleaseAxes = ['roll'];
+  key('KeyD'); key('KeyS'); advance(2000);
+  key('KeyD', 'keyup');
+  assert.equal(values.roll, 0);
+  key('KeyS', 'keyup');
+  assert.equal(values.pitch, 0.3);
+  advance(100);
+  assert.ok(values.pitch > 0 && values.pitch < 0.3);
 });

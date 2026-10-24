@@ -1,3 +1,4 @@
+import { searchRelaxedWaypointRoutes } from './relaxedWaypointSearch.js';
 import { createAipIndexKey, loadLocalAipCsvStore } from './aipCsvDataStore.js';
 import { PROVIDER_STATUS, ROUTE_SOURCES } from './routeTypes.js';
 import { aipLoadingProgress } from './aipLoadingProgress.js';
@@ -645,7 +646,7 @@ const bruteForceGraphSearch = ({ store, departureCode, arrivalCode, departurePoi
   if (!starts.size || !goals.size) {
     if (!starts.size) addDiagnostic(metrics.diagnostics, 'unreachableFixes', departureCode, { reason: 'no-brute-start-from-departure' });
     if (!goals.size) addDiagnostic(metrics.diagnostics, 'unreachableFixes', arrivalCode, { reason: 'no-brute-goal-to-arrival' });
-    return null;
+    return [];
   }
 
   metrics.diagnostics.graph.startCount = starts.size;
@@ -864,7 +865,7 @@ const decorateCandidate = ({ candidate, index, method, metrics, departureCode, a
     && candidate.regionCode === 'CN'
     && (!departureCode.startsWith('Z') || !arrivalCode.startsWith('Z'));
   const waypoints = prependAppendEndpoints({
-    waypoints: segmentLongDirectLegs(candidate.waypoints, options.maxConnectorNm),
+    waypoints: method === 'relaxed' ? candidate.waypoints : segmentLongDirectLegs(candidate.waypoints, options.maxConnectorNm),
     departureCode,
     arrivalCode,
     departurePoint,
@@ -895,7 +896,7 @@ const decorateCandidate = ({ candidate, index, method, metrics, departureCode, a
   };
   return {
     ...normalizedCandidate,
-    summary: buildRouteSummary({ ...candidate, routedNm, legs: candidate.legs || [] }, candidateMetrics)
+    summary: `${method === 'relaxed' ? 'AIP waypoints · DCT · ' : ''}${buildRouteSummary({ ...candidate, routedNm, legs: candidate.legs || [] }, candidateMetrics)}`
   };
 };
 
@@ -910,6 +911,10 @@ const dedupeCandidates = (candidates) => {
 };
 
 const compareDecoratedCandidates = (a, b) => {
+  if (a.family === 'relaxed' && b.family === 'relaxed') {
+    const maxLeg = candidate => Math.max(0, ...candidate.legs.map(leg => leg.distanceNm || 0));
+    return Math.floor(maxLeg(a) / 3) - Math.floor(maxLeg(b) / 3) || a.metrics.routedNm - b.metrics.routedNm || maxLeg(a) - maxLeg(b);
+  }
   const score = (candidate) => [
     -(candidate.metrics?.publishedLegCoveragePercent ?? 0),
     candidate.metrics?.routedNm ?? Number.POSITIVE_INFINITY,
@@ -964,7 +969,7 @@ export const searchLocalAipRouteAlternatives = async ({ departure, arrival, opti
     candidates.push(decorateCandidate({ candidate, index: candidates.length, method: 'exact', metrics: { ...metrics }, departureCode, arrivalCode, departurePoint, arrivalPoint, options: searchOptions }));
   }
 
-  if (searchOptions.useBruteForceFallback && candidates.length < searchOptions.maxCandidateRoutes) {
+  if (!searchOptions.relaxAirwayLimitations && searchOptions.useBruteForceFallback && !candidates.length) {
     const bruteCandidates = bruteForceGraphSearch({ store, departureCode, arrivalCode, departurePoint, arrivalPoint, options: searchOptions, metrics, startedAt });
     for (const candidate of bruteCandidates.filter((item) => isCandidateGeometricallyValid(item, departurePoint, arrivalPoint, searchOptions, departureCode, arrivalCode))) {
       candidates.push(decorateCandidate({ candidate, index: candidates.length, method: searchOptions.relaxAirwayLimitations ? 'relaxed' : 'brute-force', metrics: { ...metrics }, departureCode, arrivalCode, departurePoint, arrivalPoint, options: searchOptions }));
@@ -972,10 +977,24 @@ export const searchLocalAipRouteAlternatives = async ({ departure, arrival, opti
     }
   }
 
-  if (searchOptions.useGraphFallback && candidates.length < searchOptions.maxCandidateRoutes) {
+  if (!searchOptions.relaxAirwayLimitations && searchOptions.useGraphFallback && !candidates.length) {
     const graphCandidate = graphSearch({ store, departureCode, arrivalCode, departurePoint, arrivalPoint, options: searchOptions, metrics, startedAt });
     if (graphCandidate && isCandidateGeometricallyValid(graphCandidate, departurePoint, arrivalPoint, searchOptions, departureCode, arrivalCode)) {
       candidates.push(decorateCandidate({ candidate: graphCandidate, index: candidates.length, method: 'graph', metrics: { ...metrics }, departureCode, arrivalCode, departurePoint, arrivalPoint, options: searchOptions }));
+    }
+  }
+
+  // The preview can route through measured fixes even without indexed airport sockets.
+  if (searchOptions.relaxAirwayLimitations || (!candidates.length && searchOptions.allowWaypointFallback !== false)) {
+    const routes = searchRelaxedWaypointRoutes({ store, departureCode, arrivalCode, departurePoint, arrivalPoint, calculateGreatCircleNm, options: searchOptions });
+    for (const route of routes) {
+      const waypoints = route.points.map((point, index) => waypointFromPoint({ ...point, ident: route.path[index] }, index, index ? 'DCT' : ''));
+      const legs = route.legs.map((leg, index) => ({ ...leg, distanceNm: calculateGreatCircleNm(route.points[index], route.points[index + 1]) }));
+      const fixes = route.path.map(ident => ({ ident }));
+      const candidate = { ...route, waypoints, legs, routedNm: route.estimatedNm, regionCode: '', coverage: calculateCoverage({ routeFixes: fixes, resolvedFixes: fixes, legs }) };
+      if (isCandidateGeometricallyValid(candidate, departurePoint, arrivalPoint, { ...searchOptions, relaxAirwayLimitations: true }, departureCode, arrivalCode)) {
+        candidates.push(decorateCandidate({ candidate, index: candidates.length, method: 'relaxed', metrics: { ...metrics }, departureCode, arrivalCode, departurePoint, arrivalPoint, options: searchOptions }));
+      }
     }
   }
 
@@ -983,7 +1002,7 @@ export const searchLocalAipRouteAlternatives = async ({ departure, arrival, opti
     .sort(compareDecoratedCandidates)
     .slice(0, searchOptions.limit || searchOptions.maxCandidateRoutes);
   if (!routeAlternatives.length) {
-    return { status: PROVIDER_STATUS.UNAVAILABLE, message: 'No local AIP route found for this airport pair.', metrics: metrics.finish(), billing: { chargedTokens: 0 } };
+    return { status: PROVIDER_STATUS.UNAVAILABLE, message: 'No connected airway route or measured AIP waypoint route found for this airport pair.', metrics: metrics.finish(), billing: { chargedTokens: 0 } };
   }
 
   const selected = routeAlternatives[0];

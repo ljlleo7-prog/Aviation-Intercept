@@ -1,0 +1,54 @@
+.flight-status-summary {
+  margin: 12px 0 4px;
+  color: #e5edf7;
+}
+.flight-status-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.flight-status-summary-metric {
+  min-width: 0;
+  padding: 9px 11px;
+  background: rgba(4, 13, 27, .3);
+  border: 1px solid rgba(148, 183, 222, .17);
+  border-radius: 7px;
+}
+.flight-status-summary-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #a4b8d1;
+  font-size: 10px;
+  letter-spacing: .05em;
+}
+.flight-status-summary-reading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.flight-status-summary-reading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 600;
+}
+.flight-status-summary-reading > span {
+  color: #9fb5cf;
+  font-size: 10px;
+}
+.flight-status-summary-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 8px;
+  color: #b2c2d7;
+  font-size: 11px;
+}
+.flight-status-summary-context .flight-status-summary-ap { color: #86efac; }
+@media (max-width: 1000px) {
+  .flight-status-summary-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

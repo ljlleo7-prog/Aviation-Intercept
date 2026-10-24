@@ -159,13 +159,17 @@ export const generateUnifiedRoute = async ({
   options = {},
   debugResponses = {}
 } = {}) => {
+  const installedAip = await loadInstalledAipPack();
   const cacheKey = buildRouteCacheKey({
     provider: 'route',
     departure,
     arrival,
     aircraftType,
     authState,
-    options
+    options: {
+      ...options,
+      installedAip: installedAip ? [installedAip.id, installedAip.version, installedAip.installedAt] : null
+    }
   });
 
   const cached = getCachedRoute(cacheKey, EXTERNAL_ROUTE_TTL_MS);
@@ -241,7 +245,6 @@ export const generateUnifiedRoute = async ({
     return null;
   };
 
-  const installedAip = await loadInstalledAipPack();
   if ((installedAip || aipProviderMode !== AIP_PROVIDER_MODES.REMOTE_FIRST) && aipProviderMode !== AIP_PROVIDER_MODES.EXTERNAL_ONLY) {
     const localRoute = await tryLocalAip();
     if (localRoute) {

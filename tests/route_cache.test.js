@@ -6,6 +6,7 @@ import {
   buildReferenceCacheKey,
   buildRouteCacheKey,
   getCachedProviderNegative,
+  getCachedRoute,
   getCachedReferenceData,
   REFERENCE_CACHE_MAX_ENTRIES,
   ROUTE_CACHE_MAX_ENTRIES,
@@ -127,4 +128,49 @@ test('reference cache evicts oldest regional entries after the limit', () => {
   }
 
   assert.ok(store.size <= REFERENCE_CACHE_MAX_ENTRIES);
+});
+
+test('quota recovery evicts only routing caches and preserves saves and settings', () => {
+  const { store, storage } = createStorage();
+  globalThis.window = { localStorage: storage };
+  store.set('flight-save', 'keep my flight');
+  store.set('settings', 'keep my settings');
+  store.set('ultimate-crash:routes:old', JSON.stringify({ timestamp: 1, route: { data: 'x'.repeat(300) } }));
+  const write = storage.setItem;
+  storage.setItem = (key, value) => {
+    const size = [...store].filter(([existing]) => existing !== key).reduce((sum, [k, v]) => sum + k.length + v.length, 0) + key.length + value.length;
+    if (size > 500) throw new DOMException('Full', 'QuotaExceededError');
+    write(key, value);
+  };
+  const key = 'ultimate-crash:routes:new';
+  assert.doesNotThrow(() => setCachedRoute(key, { source: 'LocalAIP', data: 'y'.repeat(150) }));
+  assert.equal(getCachedRoute(key, 60000).source, 'LocalAIP');
+  assert.equal(store.has('ultimate-crash:routes:old'), false);
+  assert.equal(store.get('flight-save'), 'keep my flight');
+  assert.equal(store.get('settings'), 'keep my settings');
+});
+
+test('permanently full storage cannot break cache writes or valid cache reads', () => {
+  const { store, storage } = createStorage();
+  globalThis.window = { localStorage: storage };
+  const key = 'ultimate-crash:routes:valid';
+  store.set(key, JSON.stringify({ timestamp: Date.now(), route: { id: 'cached' } }));
+  storage.setItem = () => { throw new DOMException('Full', 'QuotaExceededError'); };
+  assert.equal(getCachedRoute(key, 60000).id, 'cached');
+  assert.doesNotThrow(() => setCachedRoute('ultimate-crash:routes:new', { id: 'new' }));
+});
+
+test('oversized diagnostics skip persistence without evicting existing entries', () => {
+  const { store, storage } = createStorage();
+  globalThis.window = { localStorage: storage };
+  setCachedRoute('ultimate-crash:routes:small', { id: 'small' });
+  setCachedRoute('ultimate-crash:routes:huge', { debug: 'x'.repeat(300000) });
+  assert.equal(store.size, 1);
+  assert.equal(getCachedRoute('ultimate-crash:routes:small', 60000).id, 'small');
+});
+
+test('unavailable browser storage degrades to uncached operation', () => {
+  globalThis.window = { get localStorage() { throw new DOMException('Blocked', 'SecurityError'); } };
+  assert.doesNotThrow(() => setCachedRoute('test', { id: 'new' }));
+  assert.equal(getCachedRoute('test', 60000), null);
 });

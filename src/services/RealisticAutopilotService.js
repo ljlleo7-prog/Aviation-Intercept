@@ -95,9 +95,9 @@ class RealisticAutopilotService {
         // Softer outer-loop pitch target prevents step changes from becoming elevator snaps.
         this.vsPID = new PIDController(0.000075, 0.000025, 0.000025, -14 * Math.PI/180, 18 * Math.PI/180, 0.45);
 
-        // Altitude Hold (Altitude -> Target VS)
-        // Used when not in ILS GS mode but Altitude Target is set.
-        this.altitudePID = new PIDController(2.0, 0.01, 0.0, -8000, 8000, 0.5);
+        // Independent altitude-to-pitch loop; V/S does not own pitch in HOLD.
+        this.holdPID = new PIDController(0.003, 0.0002, 0.008, -14 * Math.PI / 180, 18 * Math.PI / 180, 0.2);
+        this.altitudeRecoveryActive = false;
 
         // Pitch Attitude (Target Pitch -> Elevator)
         // Inner loop remains responsive, but derivative smoothing and lower gains avoid jerky reversals.
@@ -157,6 +157,7 @@ class RealisticAutopilotService {
         };
         
         this.navPlan = null;
+        this.pathGuidanceHeading = null;
         this.navState = { preTurnEngaged: false };
         this.filteredState = null;
         this.outputState = null;
@@ -166,6 +167,7 @@ class RealisticAutopilotService {
             altitude: 100
         };
         this.altitudeMode = 'idle';
+        this.altitudeRecoveryActive = false;
         this.lastAltitudeError = null;
         this.speedControlState = {
             shapedTarget: null,
@@ -243,6 +245,11 @@ class RealisticAutopilotService {
             leadBankDeg: plan.leadBankDeg || 25
         };
         this.navState = { preTurnEngaged: false };
+        this.pathGuidanceHeading = null;
+    }
+
+    setPathGuidance(heading) {
+        this.pathGuidanceHeading = Number.isFinite(heading) ? heading : null;
     }
 
     clamp(value, min, max) {
@@ -304,11 +311,13 @@ class RealisticAutopilotService {
 
     resetAltitudeCapture() {
         this.altitudeMode = 'idle';
+        this.altitudeRecoveryActive = false;
         this.lastAltitudeError = null;
     }
 
     armAltitudeCapture() {
         this.altitudeMode = 'armed';
+        this.altitudeRecoveryActive = false;
         this.lastAltitudeError = null;
     }
 
@@ -356,7 +365,6 @@ class RealisticAutopilotService {
             this.headingPID.reset();
             this.glideslopePID.reset();
             this.localizerPID.reset();
-            this.altitudePID.reset();
             this.rudderPID.reset();
             this.finalApproachDrift = null;
             this.filteredState = null;
@@ -842,7 +850,7 @@ class RealisticAutopilotService {
         }
 
         // --- LNAV with Pre-Turn Logic ---
-        if (this.mode === 'LNAV' && this.navPlan && typeof latitude === 'number' && typeof longitude === 'number') {
+        if (this.mode === 'LNAV' && !Number.isFinite(this.pathGuidanceHeading) && this.navPlan && typeof latitude === 'number' && typeof longitude === 'number') {
             const { fix, inboundCourseDeg, leadBankDeg } = this.navPlan;
             const hasRunway = this.runwayGeometry && this.runwayGeometry.thresholdStart;
             const refLat = hasRunway ? this.runwayGeometry.thresholdStart.latitude : fix.latitude;
@@ -943,6 +951,12 @@ class RealisticAutopilotService {
             // Vertical path selection is controlled independently by VNAV.
         }
         
+        if (this.mode === 'LNAV' && Number.isFinite(this.pathGuidanceHeading)) {
+            const drift = Number.isFinite(fTrack) ? this.clamp(((fHeading - fTrack + 540) % 360) - 180, -30, 30) : 0;
+            this.targets.heading = (this.pathGuidanceHeading + drift + 360) % 360;
+            this.debugState.lnavMessage = 'Following predicted route curve';
+        }
+
         // --- ILS Logic ---
         let ilsDebug = this.debugState.ils || {
             active: false,
@@ -976,7 +990,8 @@ class RealisticAutopilotService {
         }
         this.lnavVS = null;
         const lnavHandlingVS = vnavFixAltitude !== null;
-        const altitudeControlActive = !approachTracking && Number.isFinite(this.targets.altitude)
+        const altitudeControlActive = !approachTracking && (this.mode !== 'CWS' || this.vnavArmed)
+            && Number.isFinite(this.targets.altitude)
             && (this.targets.altitude > 0 || (lnavHandlingVS && this.targets.altitude === 0));
 
         // ILS/LNAV already computed their VS; pick up the right source
@@ -986,7 +1001,6 @@ class RealisticAutopilotService {
 
         if (!altitudeControlActive) {
             this.resetAltitudeCapture();
-            this.altitudePID.reset();
             if (!approachTracking) {
                 this.targets.vs = lnavHandlingVS && Number.isFinite(effectiveVS)
                     ? this.normalizeVerticalSpeedTarget(effectiveVS, this.userVsTarget)
@@ -994,85 +1008,46 @@ class RealisticAutopilotService {
             }
         } else {
             const altError = this.targets.altitude - altitude;
-            const previousAltError = this.lastAltitudeError;
-            const captureBand = 250;
-            const holdBand = 55;
             const verticalTrend = Number.isFinite(fVerticalSpeed) ? fVerticalSpeed : 0;
-            const movingTowardTarget = Math.abs(verticalTrend) > 100 && Math.sign(verticalTrend) === Math.sign(altError);
-            const divergingFromTarget = Math.abs(altError) > holdBand && Math.abs(verticalTrend) > 150 && Math.sign(verticalTrend) !== Math.sign(altError);
-            const passedTarget = previousAltError !== null && Math.sign(previousAltError) !== Math.sign(altError) && Math.abs(previousAltError) > holdBand;
-            const nearTarget = Math.abs(altError) <= captureBand;
-            const farFromTarget = Math.abs(altError) > 1200;
+            const wasHolding = this.altitudeMode === 'hold';
+            if (this.altitudeMode === 'idle') this.armAltitudeCapture();
 
-            if (this.altitudeMode === 'idle') {
+            // A large excursion leaves HOLD and acquires a gentle V/S toward
+            // the selected altitude, regardless of the previous climb direction.
+            const recoveryLimit = 600;
+            if (wasHolding && Math.abs(altError) > recoveryLimit) {
                 this.armAltitudeCapture();
+                this.altitudeRecoveryActive = true;
+                this.userVsTarget = Math.sign(altError) * 200;
+                this.targets.vs = this.userVsTarget;
+                this.vsPID.initialize(fPitch, this.userVsTarget, verticalTrend);
             }
 
-            // If already within hold band and not diverging fast, go straight to hold
-            if (this.altitudeMode !== 'hold' && Math.abs(altError) <= holdBand && Math.abs(verticalTrend) < 300) {
+            const movingToward = verticalTrend * altError > 0;
+            const secondsToTarget = movingToward && Math.abs(verticalTrend) > 50
+                ? Math.abs(altError / verticalTrend) * 60 : Infinity;
+            if (this.altitudeMode === 'armed'
+                && (Math.abs(altError) <= 350 || secondsToTarget <= 12)) {
                 this.altitudeMode = 'hold';
+                this.altitudeRecoveryActive = false;
+                const flightPath = Math.atan2(verticalTrend * 0.00508, Math.max(1, fAirspeed * 0.514444));
+                const levelPitch = Math.max(3 * Math.PI / 180, fPitch - flightPath);
+                this.holdPID.initialize(levelPitch, altitude, altitude);
+                this.holdPID.prevError = altError;
             }
-
-            // Once capture owns pitch, keep it through overshoot and recovery.
-            // Returning to armed here reapplies the selected climb/descent VS.
-            if (this.altitudeMode === 'armed' && (farFromTarget || divergingFromTarget)) {
-                this.altitudeMode = 'armed';
-            } else if (this.altitudeMode !== 'hold' && (passedTarget || (nearTarget && movingTowardTarget) || (Math.abs(altError) <= 350 && movingTowardTarget))) {
-                this.altitudeMode = 'capture';
-            }
-
-            const pidVS = this.altitudePID.update(this.targets.altitude, altitude, dt);
-            const needsRecoveryBias = altError > 0 && verticalTrend < -150;
-            const recoveryBias = needsRecoveryBias
-                ? this.clamp((Math.abs(verticalTrend) * 0.6) + (Math.abs(altError) * 0.35), 0, 1400)
-                : 0;
-            const commandedVS = pidVS + recoveryBias;
-
-            // Estimate seconds to target altitude
-            const absVS = Math.abs(verticalTrend);
-            const secsToTarget = absVS > 50 ? Math.abs(altError) / absVS * 60 : Infinity;
-
-            if (this.altitudeMode === 'armed') {
-                // User VS takes priority when non-zero; otherwise use altitude PID to correct drift
-                if (!lnavHandlingVS && this.userVsTarget !== 0) {
-                    effectiveVS = this.userVsTarget;
-                } else {
-                    effectiveVS = this.clamp(commandedVS, -2500, 2500);
-                }
-                this.targets.vs = lnavHandlingVS ? Math.round(effectiveVS / 100) * 100 : this.userVsTarget;
-
-                const userVsSignMatches = this.userVsTarget !== 0 && Math.sign(this.userVsTarget) === Math.sign(altError);
-                const derateWindow = !lnavHandlingVS && userVsSignMatches && (secsToTarget < 8 || Math.abs(altError) <= 320);
-                if (derateWindow) {
-                    const approachScale = this.clamp(secsToTarget / 8, 0.18, 1.0);
-                    effectiveVS = this.clamp((this.userVsTarget * approachScale) + (commandedVS * (1 - approachScale)), -2200, 2200);
-                    this.targets.vs = Math.round(effectiveVS / 100) * 100;
-                }
-            } else if (this.altitudeMode === 'capture' || this.altitudeMode === 'hold') {
-                const captureScale = this.clamp(Math.abs(altError) / (captureBand * 1.45), 0.22, 1.0);
-                const belowTargetBias = altError > 0 ? this.clamp(Math.abs(altError) / 160, 0, 220) : 0;
-                const leveledVS = this.clamp((commandedVS * captureScale) + belowTargetBias, -450, 600);
-                // In hold: use small PID correction rather than hard 0, so pitch fights drift
-                effectiveVS = Math.abs(altError) <= holdBand
-                    ? this.clamp(commandedVS * 0.3, -200, 200)
-                    : (divergingFromTarget || farFromTarget ? this.clamp(commandedVS + Math.sign(altError) * Math.abs(verticalTrend) * 0.5, -2500, 2500) : leveledVS);
-                this.targets.vs = Math.round(effectiveVS / 100) * 100;
-                if (Math.abs(altError) <= holdBand || (passedTarget && Math.abs(verticalTrend) <= 300)) {
-                    this.altitudeMode = 'hold';
-                    if (Math.abs(verticalTrend) < 150) {
-                        effectiveVS = this.clamp(commandedVS * 0.3, -200, 200);
-                        this.targets.vs = 0;
-                    } else {
-                        effectiveVS = this.clamp(commandedVS, -500, 500);
-                    }
-                }
-            }
-
-            this.lastAltitudeError = altError;
-            // Show a level-off target while retaining small drift corrections.
-            if (lnavHandlingVS && Math.abs(altError) <= holdBand) {
+            if (this.altitudeMode === 'capture' || this.altitudeMode === 'hold') {
+                // Zero V/S selection: pitch is controlled directly by altitude.
+                effectiveVS = 0;
                 this.targets.vs = 0;
+            } else {
+                if (!lnavHandlingVS && this.userVsTarget === 0) {
+                    this.userVsTarget = Math.sign(altError) * 200;
+                }
+                effectiveVS = lnavHandlingVS && !this.altitudeRecoveryActive
+                    ? this.clamp(altError * 2, -2500, 2500) : this.userVsTarget;
+                this.targets.vs = Math.round(effectiveVS);
             }
+            this.lastAltitudeError = altError;
         }
 
         const { speed: targetSpeed, heading: targetHeading } = this.targets;
@@ -1087,14 +1062,19 @@ class RealisticAutopilotService {
             }
         }
 
+        const altitudeOwnsPitch = altitudeControlActive && this.altitudeMode === 'hold';
+        const energyVS = altitudeOwnsPitch ? fVerticalSpeed : targetVS;
+
         // 1. Auto-Throttle (Predictive Speed Control)
-        const speedControl = this.computePredictiveThrottle(targetSpeed, fAirspeed, targetVS, dt);
+        const speedControl = this.computePredictiveThrottle(targetSpeed, fAirspeed, energyVS, dt);
         const rawThrottleCmd = speedControl.throttleCmd;
-        const throttleEnvelope = this.applyThrottleEnvelope(rawThrottleCmd, targetSpeed, fAirspeed, targetVS, this.altitudeMode, altitudeControlActive ? (this.targets.altitude - altitude) : null);
+        const throttleEnvelope = this.applyThrottleEnvelope(rawThrottleCmd, targetSpeed, fAirspeed, energyVS, this.altitudeMode, altitudeControlActive ? (this.targets.altitude - altitude) : null);
         const throttleCmd = throttleEnvelope.throttleCmd;
 
         // 2. Vertical Speed Control (VS -> Pitch -> Trim)
-        const targetPitchRaw = this.vsPID.update(targetVS, fVerticalSpeed, dt);
+        const targetPitchRaw = altitudeOwnsPitch
+            ? this.holdPID.update(this.targets.altitude, altitude, dt)
+            : this.vsPID.update(targetVS, fVerticalSpeed, dt);
         const postEngagementPitchLimitDeg = this.altitudeMode === 'capture' ? 20 : 18;
         const engagementPitchLimitDeg = this.engagementBlendRemaining > 0
             ? 7.5
@@ -1226,6 +1206,8 @@ class RealisticAutopilotService {
         // Update Debug State
         this.debugState = {
             headingError,
+            altitudeRecoveryActive: this.altitudeRecoveryActive,
+            verticalControl: altitudeOwnsPitch ? 'altitude' : 'vs',
             nav1Frequency: this.nav1Frequency,
             targetRoll: targetRoll * 180 / Math.PI, // Convert to deg for display
             pitchError: (targetPitch - fPitch) * 180 / Math.PI,

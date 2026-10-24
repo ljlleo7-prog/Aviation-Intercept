@@ -4,8 +4,8 @@ import {
     buildFlyByTurn,
     sampleFlyByRoute,
     projectToLocalMeters,
+    projectFromLocalMeters,
     normalizeHeadingDegrees,
-    normalizeSignedHeadingDelta,
     clamp
 } from '../../utils/flightMath.js';
 
@@ -15,6 +15,39 @@ export default class NavigationService {
         this.currentWaypointIndex = 0;
         this.lastPath = [];
         this.lastGuidance = null;
+        this.pathCache = null;
+    }
+
+    // Check values as well as identity: route editors may mutate waypoints in place.
+    getSampledPath(waypoints, options = {}) {
+        const radius = Math.max(150, options.turnRadiusMeters ?? 1852);
+        const spacing = Math.max(50, options.sampleSpacingMeters ?? 250);
+        const cache = this.pathCache;
+        const matches = cache && Object.is(cache.radius, radius) && Object.is(cache.spacing, spacing)
+            && cache.points.length === waypoints.length
+            && waypoints.every((point, index) => {
+                const previous = cache.points[index];
+                return Object.is(point?.latitude, previous.latitude)
+                    && Object.is(point?.longitude, previous.longitude)
+                    && Object.is(point?.label, previous.label)
+                    && Object.is(point?.name, previous.name)
+                    && Object.is(point?.isHold, previous.isHold)
+                    && Object.is(point?.flyOver, previous.flyOver)
+                    && Object.is(point?.isFlyOver, previous.isFlyOver)
+                    && Object.is(point?.sequencingMode, previous.sequencingMode);
+            });
+        if (matches) return cache.path;
+
+        const path = sampleFlyByRoute(waypoints, options);
+        this.pathCache = {
+            radius, spacing, path,
+            points: waypoints.map(point => ({
+                latitude: point?.latitude, longitude: point?.longitude,
+                label: point?.label, name: point?.name, isHold: point?.isHold,
+                flyOver: point?.flyOver, isFlyOver: point?.isFlyOver, sequencingMode: point?.sequencingMode
+            }))
+        };
+        return path;
     }
 
     updateFlightPlan(flightPlan, currentWaypointIndex) {
@@ -31,7 +64,7 @@ export default class NavigationService {
 
         this.flightPlan = newWaypoints;
         this.currentWaypointIndex = Math.min(newIndex, Math.max(0, newWaypoints.length - 1));
-        this.lastPath = sampleFlyByRoute(this.flightPlan);
+        this.lastPath = this.getSampledPath(this.flightPlan);
 
         return {
             flightPlan: this.flightPlan,
@@ -48,7 +81,7 @@ export default class NavigationService {
                 currentWaypointIndex: 0,
                 targetHeading: null,
                 activeWaypoint: null,
-                navigationPath: sampleFlyByRoute(waypoints),
+                navigationPath: this.getSampledPath(waypoints),
                 activeTurn: null
             };
             return this.lastGuidance;
@@ -81,12 +114,12 @@ export default class NavigationService {
                 currentWaypointIndex: 0,
                 targetHeading: null,
                 activeWaypoint: null,
-                navigationPath: sampleFlyByRoute(waypoints),
+                navigationPath: this.getSampledPath(waypoints),
                 activeTurn: null
             };
         }
 
-        const navigationPath = sampleFlyByRoute(waypoints, options);
+        const navigationPath = this.getSampledPath(waypoints, options);
         const currentPosition = { latitude: state.latitude, longitude: state.longitude };
         let distToWaypoint = calculateDistanceMeters(state.latitude, state.longitude, activeWaypoint.latitude, activeWaypoint.longitude);
         let previousWaypoint = activeIndex > 0 ? waypoints[activeIndex - 1] : null;
@@ -128,7 +161,7 @@ export default class NavigationService {
 
         const targetHeading = activeWaypoint?.isHold
             ? this.computeHoldHeading(currentPosition, activeWaypoint)
-            : this.computeTargetHeading(currentPosition, previousWaypoint, activeWaypoint, nextWaypoint, activeTurn);
+            : this.computeTargetHeading(currentPosition, previousWaypoint, activeWaypoint, nextWaypoint, activeTurn, state, options);
 
         return {
             currentWaypointIndex: activeIndex,
@@ -150,35 +183,64 @@ export default class NavigationService {
         return normalizeHeadingDegrees(bearing + 90 - (correction * 180 / Math.PI));
     }
 
-    computeTargetHeading(currentPosition, previousWaypoint, activeWaypoint, nextWaypoint, activeTurn) {
+    computeTargetHeading(currentPosition, previousWaypoint, activeWaypoint, nextWaypoint, activeTurn, state = {}, options = {}) {
         if (!activeWaypoint) return null;
-        if (!activeTurn || !previousWaypoint || !nextWaypoint) {
+        if (!previousWaypoint) {
             return calculateBearing(currentPosition.latitude, currentPosition.longitude, activeWaypoint.latitude, activeWaypoint.longitude);
         }
-
-        const entryDistance = calculateDistanceMeters(
-            currentPosition.latitude,
-            currentPosition.longitude,
-            activeTurn.entry.latitude,
-            activeTurn.entry.longitude
-        );
-        if (entryDistance > 250) {
-            return calculateBearing(currentPosition.latitude, currentPosition.longitude, activeTurn.entry.latitude, activeTurn.entry.longitude);
+        // Follow the local route, never home back to an entry point already passed.
+        // This bounded polyline uses 24 arc chords regardless of enroute leg length.
+        const geographicPath = [previousWaypoint];
+        if (activeTurn && nextWaypoint) {
+            geographicPath.push(activeTurn.entry);
+            for (let i = 1; i <= 24; i++) {
+                const angle = activeTurn.startAngle + activeTurn.arcAngle * i / 24;
+                const x = activeTurn.center.x + Math.cos(angle) * activeTurn.radiusMeters;
+                const y = activeTurn.center.y + Math.sin(angle) * activeTurn.radiusMeters;
+                geographicPath.push(projectFromLocalMeters(activeTurn.referenceLat, activeTurn.referenceLon, x, y));
+            }
+            geographicPath.push(nextWaypoint);
+        } else {
+            geographicPath.push(activeWaypoint);
+            if (nextWaypoint && !activeWaypoint.flyOver && !activeWaypoint.isFlyOver && activeWaypoint.sequencingMode !== 'manual') geographicPath.push(nextWaypoint);
         }
-
-        const progress = this.getTurnProgress(currentPosition, activeTurn);
-        const tangentHeading = activeTurn.inboundCourseDeg + progress * normalizeSignedHeadingDelta(activeTurn.outboundCourseDeg - activeTurn.inboundCourseDeg);
-        const exitDistance = calculateDistanceMeters(
-            currentPosition.latitude,
-            currentPosition.longitude,
-            activeTurn.exit.latitude,
-            activeTurn.exit.longitude
-        );
-        if (exitDistance < 250) {
-            return activeTurn.outboundCourseDeg;
+        const path = geographicPath.map(point => projectToLocalMeters(currentPosition.latitude, currentPosition.longitude, point.latitude, point.longitude));
+        let closest = null;
+        for (let i = 0; i < path.length - 1; i++) {
+            const a = path[i]; const b = path[i + 1];
+            const dx = b.x - a.x; const dy = b.y - a.y;
+            const length = Math.hypot(dx, dy);
+            if (length < 0.01) continue;
+            const t = clamp(-(a.x * dx + a.y * dy) / (length * length), 0, 1);
+            const point = { x: a.x + t * dx, y: a.y + t * dy };
+            const distanceSq = point.x * point.x + point.y * point.y;
+            if (!closest || distanceSq < closest.distanceSq) closest = { index: i, point, distanceSq };
         }
-
-        return normalizeHeadingDegrees(tangentHeading);
+        if (!closest) return null;
+        const speed = Math.max(0, Number(state.groundSpeed) || Number(state.airspeed) || 0) * 0.514444;
+        let remaining = clamp(options.lookAheadMeters ?? speed * 18, 500, 6000);
+        let target = closest.point;
+        for (let i = closest.index; i < path.length - 1; i++) {
+            const end = path[i + 1];
+            const dx = end.x - target.x; const dy = end.y - target.y;
+            const length = Math.hypot(dx, dy);
+            if (length >= remaining && length > 0) {
+                target = { x: target.x + dx * remaining / length, y: target.y + dy * remaining / length };
+                remaining = 0; break;
+            }
+            remaining -= length;
+            target = end;
+        }
+        // Extend the final course rather than commanding a reversal after passing it.
+        if (remaining > 0 && !activeWaypoint.flyOver && !activeWaypoint.isFlyOver && activeWaypoint.sequencingMode !== 'manual') {
+            const a = path.at(-2); const b = path.at(-1);
+            const length = Math.hypot(b.x - a.x, b.y - a.y);
+            if (length > 0) {
+                remaining += Math.max(0, (-b.x * (b.x - a.x) - b.y * (b.y - a.y)) / length);
+                target = { x: b.x + (b.x - a.x) * remaining / length, y: b.y + (b.y - a.y) * remaining / length };
+            }
+        }
+        return normalizeHeadingDegrees(Math.atan2(target.y, target.x) * 180 / Math.PI);
     }
 
     getTurnProgress(currentPosition, turn) {
@@ -205,6 +267,7 @@ export default class NavigationService {
         const unitX = nextLocal.x / direction;
         const unitY = nextLocal.y / direction;
         const alongTrack = currentLocal.x * unitX + currentLocal.y * unitY;
-        return alongTrack > 50;
+        const crossTrack = Math.abs(currentLocal.x * unitY - currentLocal.y * unitX);
+        return alongTrack > 50 && crossTrack < Math.max(1852, turn.radiusMeters * 2);
     }
 }

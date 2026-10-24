@@ -600,7 +600,23 @@ const zh = {
             landing_rwy: '降落跑道',
             sid: 'SID',
             star: 'STAR',
-            waypoints: '航点:'
+            waypoints: '航点:',
+            wind: '风速',
+            visibility: '能见度',
+            turbulence: '颠簸',
+            cloud_cover: '云量',
+            difficulty: '难度',
+            failure_mode: '故障模式'
+        },
+        units: { knots: '节', km: '公里' },
+        turbulence: { none: '无', light: '轻度', moderate: '中度', severe: '严重', extreme: '极端', unavailable: '暂无数据' },
+        failure_modes: { normal: '正常模拟', custom: '自定义故障', none: '无', random: '随机', fixed: '固定' },
+        weather_sources: {
+            live: '起飞机场实时天气；能见度和颠簸为估算值。',
+            simulated: '起飞机场模拟天气（离线模式）。',
+            fallback: '起飞机场模拟天气（实时天气暂不可用）。',
+            configured: '场景预设天气。',
+            unavailable: '起飞机场天气暂无数据。'
         },
         buttons: {
             acknowledge: '确认签派'

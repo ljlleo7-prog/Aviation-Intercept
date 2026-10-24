@@ -64,23 +64,73 @@ test('VNAV receives the active route waypoint altitude during actual physics upd
 });
 
 for (const direction of [1, -1]) {
-  test(`selected altitude capture stays latched through ${direction > 0 ? 'climb' : 'descent'} overshoot`, () => {
+  test(`HOLD owns pitch independently of V/S after ${direction > 0 ? 'climb' : 'descent'}`, () => {
     const ap = new RealisticAutopilotService();
-    ap.setTargets({ mode: 'HDG', altitude: 8000, speed: 210, heading: 90, vs: direction * 1200 });
+    ap.setTargets({ mode: 'HDG', altitude: 16000, speed: 210, heading: 90, vs: direction * 1200 });
     ap.setEngaged(true);
-    ap.update(stateAt(8000 - direction * 200, direction * 1200), controls, .05);
-    assert.equal(ap.altitudeMode, 'capture');
-    for (let i = 0; i < 80; i++) {
-      ap.update(stateAt(8000 + direction * 100, direction * 400), controls, .05);
-      assert.equal(ap.altitudeMode, 'capture', 'overshoot must not restore manual V/S');
-      assert.ok(ap.targets.vs * direction <= 0, 'capture must command recovery toward the selected altitude');
-    }
-    for (let i = 0; i < 100; i++) ap.update(stateAt(8000, 0), controls, .05);
+    ap.update(stateAt(16000, 0), controls, .05);
     assert.equal(ap.altitudeMode, 'hold');
-    for (let i = 0; i < 80; i++) {
-      ap.update(stateAt(8000 + direction * 200, direction * 200), controls, .05);
-      assert.equal(ap.altitudeMode, 'hold', 'hold must correct drift without returning to manual V/S');
-      assert.equal(Math.sign(ap.targets.vs), -direction);
-    }
+    ap.vsPID.update = () => { throw new Error('HOLD must not run the V/S controller'); };
+    for (let i = 0; i < 100; i++) ap.update(stateAt(16000 + direction * 100, direction * 200), controls, .05);
+    assert.equal(ap.debugState.verticalControl, 'altitude');
+    assert.equal(ap.targets.vs, 0);
+    assert.equal(ap.altitudeMode, 'hold');
+    assert.equal(Math.sign(ap.debugState.targetPitch), -direction);
+  });
+
+  test(`large ${direction > 0 ? 'high' : 'low'} altitude excursion selects recovery V/S toward target`, () => {
+    const ap = new RealisticAutopilotService();
+    ap.setTargets({ mode: 'HDG', altitude: 16000, speed: 210, heading: 90, vs: direction * 200 });
+    ap.setEngaged(true);
+    ap.update(stateAt(16000, 0), controls, .05);
+    ap.update(stateAt(16000 + direction * 1000, direction * 200), controls, .05);
+    assert.equal(ap.altitudeMode, 'armed');
+    assert.equal(ap.targets.vs, -direction * 200);
+    assert.equal(ap.userVsTarget, -direction * 200);
+    assert.equal(ap.debugState.verticalControl, 'vs');
+    assert.equal(ap.debugState.altitudeRecoveryActive, true);
+    ap.update(stateAt(16000 + direction * 800, direction * 200), controls, .05);
+    assert.equal(ap.targets.vs, -direction * 200);
+    ap.update(stateAt(16000 + direction * 200, -direction * 200), controls, .05);
+    assert.equal(ap.debugState.verticalControl, 'altitude');
+    assert.equal(ap.debugState.altitudeRecoveryActive, false);
+    assert.equal(ap.targets.vs, 0);
   });
 }
+
+test('ordinary V/S travel cannot request time-acceleration exit before attempting HOLD', () => {
+  const ap = new RealisticAutopilotService();
+  ap.setTargets({ mode: 'HDG', altitude: 16000, speed: 210, heading: 90, vs: 1200 });
+  ap.setEngaged(true);
+  ap.update(stateAt(17000, 200), controls, .05);
+  assert.equal(ap.altitudeMode, 'armed');
+  assert.equal(ap.targets.vs, 1200);
+  assert.equal(ap.debugState.altitudeRecoveryActive, false);
+  ap.update(stateAt(16200, -200), controls, .05);
+  assert.equal(ap.altitudeMode, 'hold', 'must attempt HOLD on entering capture range');
+  assert.equal(ap.debugState.altitudeRecoveryActive, false);
+  ap.update(stateAt(16599, 200), controls, .05);
+  assert.equal(ap.altitudeMode, 'hold');
+  ap.update(stateAt(16601, 200), controls, .05);
+  assert.equal(ap.altitudeMode, 'armed');
+  assert.equal(ap.debugState.altitudeRecoveryActive, true);
+  assert.equal(ap.targets.vs, -200);
+});
+
+test('independent HOLD settles the aircraft at selected altitude without a residual V/S selection', async () => {
+  const aircraft = (await loadAircraftData()).find(item => item.model === 'Boeing 737-800');
+  const physics = new RealisticFlightPhysicsService(aircraft, 34, -118, 'intermediate');
+  physics.setInitialConditions({ position: { z: 9700 * .3048 }, heading: 90, fuel: 5000, coldStart: false });
+  physics.state.vel.set(180 * .514444, 0, 0);
+  physics.setMotionEnabled(true);
+  physics.setAutopilot(true, { mode: 'HDG', speed: 180, heading: 90, vs: 1500, altitude: 10000 });
+  for (let i = 0; i < 3600; i++) {
+    const state = physics.update({ throttle: .55, pitch: 0, roll: 0, yaw: 0, trim: 0, flaps: 0, gear: false }, .05);
+    if (i >= 3000) {
+      assert.equal(state.autopilotDebug.verticalControl, 'altitude');
+      assert.equal(state.autopilotTargets.vs, 0);
+      assert.ok(Math.abs(state.derived.altitude - 10000) < 20);
+      assert.ok(Math.abs(state.verticalSpeed) < 80);
+    }
+  }
+});

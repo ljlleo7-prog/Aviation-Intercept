@@ -27,7 +27,7 @@ export const AIP_PROVIDER_MODES = Object.freeze({
   EXTERNAL_ONLY: 'external-only'
 });
 
-export const ROUTE_CACHE_VERSION = 'route-v2';
+export const ROUTE_CACHE_VERSION = 'route-v5-bounded-stations';
 export const EXTERNAL_ROUTE_TTL_MS = 24 * 60 * 60 * 1000;
 export const REFERENCE_DATA_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

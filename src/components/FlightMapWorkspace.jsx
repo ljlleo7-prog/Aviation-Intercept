@@ -8,6 +8,7 @@ import { airportService } from '../services/airportService';
 import './FlightMapWorkspace.css';
 import AirportSceneryMap from './AirportSceneryMap';
 import { loadAirportGroundPackage } from '../services/airportGroundPackages';
+import { getActiveWaypoints } from '../services/activeFlightPlan.js';
 
 const FlightMapWorkspace = ({ flightPlan, flightState, departure, arrival, routeDetails, aircraftData }) => {
   const { tx } = useLanguage();
@@ -17,10 +18,10 @@ const FlightMapWorkspace = ({ flightPlan, flightState, departure, arrival, route
   const [runwayName, setRunwayName] = useState('');
   const [zoom, setZoom] = useState(1);
   const [labels, setLabels] = useState(true);
-  const waypoints = Array.isArray(flightPlan) ? flightPlan : flightPlan?.waypoints || routeDetails?.waypoints || [];
+  const waypoints = flightPlan ? getActiveWaypoints(flightPlan) : routeDetails?.waypoints || [];
   const airports = waypoints.map(point => airportService.getAirportByCode(point.icao || point.label || '')).filter(Boolean);
-  const origin = departure || airports[0];
-  const destination = arrival || airports.at(-1);
+  const origin = departure || flightPlan?.departure || airports[0];
+  const destination = arrival || flightPlan?.arrival || airports.at(-1);
   const currentAirport = getMapAirports(airportService.getAllAirports(), flightState?.latitude, flightState?.longitude, 8, aircraftData, 1)[0];
   const airport = [selected, currentAirport, origin, destination].find(candidate => isAirportSuitableForMap(candidate, aircraftData));
   const details = airportService.getAirportByCode(airport?.icao || '') || airport;
@@ -49,7 +50,7 @@ const FlightMapWorkspace = ({ flightPlan, flightState, departure, arrival, route
       <div className="map-controls">{currentAirport && <button onClick={() => chooseAirport(currentAirport)}>Current · {currentAirport.icao}</button>}{origin && <button onClick={() => chooseAirport(origin)}>{tx("DEP ·")}{origin.icao || origin.label}</button>}{destination && <button onClick={() => chooseAirport(destination)}>{tx("ARR ·")}{destination.icao || destination.label}</button>}</div>
     </div>
     {mode === 'route' ? <>
-      <LocalRouteMap departure={origin} arrival={destination} waypoints={waypoints} routeObject={routeDetails} aircraftPosition={flightState} height={340} />
+      <LocalRouteMap departure={origin} arrival={destination} waypoints={waypoints} routeObject={{ waypoints }} aircraftPosition={flightState} height={340} />
       <div className="map-stat-grid"><div><small>{tx("Departure")}</small><strong>{origin?.icao || tx("Unassigned")}</strong></div><div><small>{tx("Destination")}</small><strong>{destination?.icao || tx("Unassigned")}</strong></div><div><small>{tx("Route fixes")}</small><strong>{waypoints.length}</strong></div></div>
       <p className="map-note">{tx("Review route continuity and procedure segments. Diagram fits the route automatically; terrain and airspace are not depicted.")}</p>
     </> : <>

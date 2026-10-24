@@ -11,6 +11,7 @@ const FILES = {
 };
 
 let cachedStore = null;
+let cachedSource = null;
 
 const joinUrlPath = (base, file) => `${String(base || '').replace(/\/$/, '')}/${file}`;
 
@@ -70,7 +71,9 @@ const addToListMap = (map, mapKey, value) => {
 };
 
 const loadLocalAipCsvStore = async ({ csvDir = defaultCsvDir, forceReload = false, readFile = null, progressCallback = null } = {}) => {
-  if (cachedStore && !forceReload) return cachedStore;
+  const installed = readFile ? null : await loadInstalledAipPack();
+  const source = installed || readFile || csvDir;
+  if (cachedStore && cachedSource === source && cachedStore.csvDir === csvDir && !forceReload) return cachedStore;
 
   const [lookupRows, legRows, pointRows, edgeRows] = await Promise.all([
     parseCsv(csvDir, FILES.lookup, readFile, progressCallback),
@@ -137,6 +140,7 @@ const loadLocalAipCsvStore = async ({ csvDir = defaultCsvDir, forceReload = fals
     });
   }
 
+  cachedSource = source;
   cachedStore = {
     csvDir,
     lookupByPair,
@@ -158,6 +162,7 @@ const loadLocalAipCsvStore = async ({ csvDir = defaultCsvDir, forceReload = fals
 
 const resetLocalAipCsvStore = () => {
   cachedStore = null;
+  cachedSource = null;
 };
 
 export { defaultCsvDir, key as createAipIndexKey, loadLocalAipCsvStore, resetLocalAipCsvStore };

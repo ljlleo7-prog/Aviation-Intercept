@@ -1,8 +1,9 @@
+import { fetchElevationResponse } from './elevationRequests.js';
 
 const BASE_URL = 'https://api.open-elevation.com/api/v1/lookup';
 const FETCH_TIMEOUT_MS = 3000;
 
-class TerrainService {
+export class TerrainService {
   constructor() {
     this.cache = new Map(); // Key: "lat,lon" (rounded), Value: elevation
     this.lastCallTime = 0;
@@ -44,16 +45,18 @@ class TerrainService {
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-      const response = await fetch(`${BASE_URL}?locations=${lat},${lon}`, {
+      const response = await fetchElevationResponse(`${BASE_URL}?locations=${lat},${lon}`, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
       timeoutId = null;
+      if (!response) return null;
       if (!response.ok) throw new Error('Terrain API failed');
 
       const data = await response.json();
       if (data.results && data.results.length > 0) {
         const elevation = data.results[0].elevation;
+        if (!Number.isFinite(elevation)) return null;
         this.cache.set(key, elevation);
 
         // Prune cache if too big
@@ -70,7 +73,7 @@ class TerrainService {
       if (timeoutId) clearTimeout(timeoutId);
     }
 
-    return 0; // Fallback to sea level
+    return null; // Keep the last known terrain until valid data arrives.
   }
 }
 

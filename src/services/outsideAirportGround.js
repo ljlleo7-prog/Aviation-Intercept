@@ -70,11 +70,13 @@ export function createAirportGround(parent, geometry, runways, groundPackage, te
   const markMaterial = new THREE.MeshBasicMaterial({ color: 0xd9b851, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const lightsMaterial = new THREE.PointsMaterial({ color: 0x3378e7, size: 2.5, sizeAttenuation: false, transparent: true,
     opacity: .8, depthWrite: false, toneMapped: false });
-  let batches = []; let selectionKey = ''; let lastUpdate = -Infinity; let detailMesh; let lightMesh;
+  let batches = []; let selectionKey = ''; let surfaceKey = ''; let surfacePositions = []; let lastUpdate = -Infinity; let detailMesh; let lightMesh;
   const retainedChunks = new Map();
   const localEye = new THREE.Vector3();
   const clearBatches = () => {
     batches.forEach((mesh) => { root.remove(mesh); mesh.geometry.dispose(); }); batches = [];
+  };
+  const clearDetails = () => {
     for (const mesh of [detailMesh, lightMesh]) if (mesh) { root.remove(mesh); mesh.geometry.dispose(); }
     detailMesh = null; lightMesh = null;
   };
@@ -119,7 +121,7 @@ export function createAirportGround(parent, geometry, runways, groundPackage, te
       buildings.update(economy, daylight);
       lightsMaterial.opacity = .8 * (1 - daylight);
       if (lightMesh) lightMesh.visible = daylight < .6;
-      if (enroute) { if (batches.length) { clearBatches(); retainedChunks.clear(); selectionKey = ''; } return; }
+      if (enroute) { if (selectionKey) { clearBatches(); clearDetails(); retainedChunks.clear(); selectionKey = ''; surfaceKey = ''; surfacePositions = []; } return; }
       if (now - lastUpdate < 1200) return;
       lastUpdate = now;
       root.worldToLocal(localEye.copy(camera.position));
@@ -132,19 +134,42 @@ export function createAirportGround(parent, geometry, runways, groundPackage, te
         }));
       // Merge selected chunks by surface: at most four pavement/land draws.
       const key = `${economy}:${Math.floor(localEye.x / 500)}:${Math.floor(localEye.z / 500)}:${chosen.map((items) => items.map(({ index }) => index).join(',')).join('|')}`;
-      if (key === selectionKey) return;
-      selectionKey = key; clearBatches();
-      KINDS.forEach((kind, kindIndex) => {
-        const source = layout.meshes[kind]; const positions = [];
-        chosen[kindIndex].forEach(({ chunk }) => chunk.indices.forEach((index) => positions.push(source.positions[index * 2], kind === 'land' ? -.12 : -.025, source.positions[index * 2 + 1])));
-        if (!positions.length) return;
-        const meshGeometry = new THREE.BufferGeometry(); meshGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); meshGeometry.computeVertexNormals();
-        const mesh = new THREE.Mesh(meshGeometry, materials[kind]); root.add(mesh); batches.push(mesh);
+      const nextSurfaceKey = `${economy}:${chosen.map((items) => items.map(({ index }) => index).join(',')).join('|')}`;
+      // Chunk numbers alone do not identify source data. Compare selected coordinates
+      // too, so replacement/refined data cannot be hidden by an unchanged selection.
+      const sameSurfaces = nextSurfaceKey === surfaceKey && chosen.every((items, kindIndex) => {
+        const source = layout.meshes[KINDS[kindIndex]];
+        const previous = surfacePositions[kindIndex];
+        let offset = 0;
+        for (const { chunk } of items) {
+          for (const index of chunk.indices) {
+            if (!Object.is(previous?.[offset], source.positions[index * 2])
+                || !Object.is(previous?.[offset + 2], source.positions[index * 2 + 1])) return false;
+            offset += 3;
+          }
+        }
+        return previous?.length === offset;
       });
+      if (key === selectionKey && sameSurfaces) return;
+      selectionKey = key;
+      clearDetails();
+      if (!sameSurfaces) {
+        surfaceKey = nextSurfaceKey;
+        clearBatches();
+        surfacePositions = [];
+        KINDS.forEach((kind, kindIndex) => {
+          const source = layout.meshes[kind]; const positions = [];
+          chosen[kindIndex].forEach(({ chunk }) => chunk.indices.forEach((index) => positions.push(source.positions[index * 2], kind === 'land' ? -.12 : -.025, source.positions[index * 2 + 1])));
+          surfacePositions[kindIndex] = positions;
+          if (!positions.length) return;
+          const meshGeometry = new THREE.BufferGeometry(); meshGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); meshGeometry.computeVertexNormals();
+          const mesh = new THREE.Mesh(meshGeometry, materials[kind]); root.add(mesh); batches.push(mesh);
+        });
+      }
       buildDetails(localEye, economy);
     },
     dispose() {
-      clearBatches(); mask.dispose();
+      clearBatches(); clearDetails(); mask.dispose();
       Object.values(materials).forEach((material) => material.dispose()); markMaterial.dispose(); lightsMaterial.dispose();
       // Building resources remain in the scene and are disposed by its owner.
     }

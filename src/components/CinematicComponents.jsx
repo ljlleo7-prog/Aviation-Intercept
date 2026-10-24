@@ -1,6 +1,7 @@
 
 import React from 'react';
 import PropTypes from 'prop-types';
+import { formatBriefingWeather } from '../utils/briefingWeather.js';
 import { useLanguage } from '../contexts/LanguageContext';
 import './CinematicComponents.css';
 
@@ -13,26 +14,17 @@ FadeOverlay.propTypes = {
   children: PropTypes.node
 };
 
-const CinematicReview = ({ callsign, selectedDeparture, selectedArrival, aircraftModel, weatherData, crewCount, failureType, difficulty, pax, payload, routeDetails, onComplete }) => {
+const CinematicReview = ({ callsign, selectedDeparture, selectedArrival, aircraftModel, weatherData, crewCount, failureType, failureSelection, difficulty, pax, payload, routeDetails, onComplete }) => {
   const { t } = useLanguage();
-  // Safe access to weather data with fallbacks
-  const safeWeatherData = weatherData || {
-    windSpeed: 0,
-    visibility: 0,
-    cloudCover: 0,
-    turbulence: 'none'
-  };
-  
-  // Ensure turbulence has a valid string value
-  const safeTurbulence = safeWeatherData.turbulence || 'none';
-  
+  const weather = formatBriefingWeather(weatherData || {});
+  const source = ['live', 'simulated', 'fallback', 'unavailable'].includes(weatherData?.source) ? weatherData.source : 'configured';
   // Safe access to other variables
   const safeCallsign = callsign || 'UNNAMED';
   const safeDepartureIata = selectedDeparture?.iata || 'DEP';
   const safeArrivalIata = selectedArrival?.iata || 'ARR';
   const safeAircraftModel = aircraftModel || 'UNKNOWN';
   const safeCrewCount = crewCount || 2;
-  const safeFailureType = failureType || 'none';
+  const safeFailureType = failureSelection?.mode || failureType || 'none';
   const safeDifficulty = difficulty || 'rookie';
   const safePax = pax || 0;
   const safePayload = payload || 0;
@@ -99,19 +91,20 @@ const CinematicReview = ({ callsign, selectedDeparture, selectedArrival, aircraf
           <div className="fax-section">
             <div className="fax-section-title">{t('ui.cinematic.sections.metar_env')}</div>
             <div className="fax-grid">
-              <div className="fax-row"><span className="fax-label">WIND</span> <span className="fax-value">{safeWeatherData.windSpeed} KTS</span></div>
-              <div className="fax-row"><span className="fax-label">VISIBILITY</span> <span className="fax-value">{safeWeatherData.visibility} MI</span></div>
-              <div className="fax-row"><span className="fax-label">TURBULENCE</span> <span className="fax-value">{safeTurbulence.toUpperCase()}</span></div>
-              <div className="fax-row"><span className="fax-label">CLOUD COVER</span> <span className="fax-value">{safeWeatherData.cloudCover}%</span></div>
+              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.wind')}</span> <span className="fax-value">{weather.windSpeed} {t('ui.cinematic.units.knots')}</span></div>
+              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.visibility')}</span> <span className="fax-value">{weather.visibilityKm} {t('ui.cinematic.units.km')}</span></div>
+              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.turbulence')}</span> <span className="fax-value">{t(`ui.cinematic.turbulence.${weather.turbulenceKey}`)}</span></div>
+              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.cloud_cover')}</span> <span className="fax-value">{weather.cloudCover}%</span></div>
             </div>
+            <p>{t(`ui.cinematic.weather_sources.${source}`)}</p>
           </div>
 
           {/* Section 4: Risk Assessment */}
           <div className="fax-section">
             <div className="fax-section-title">{t('ui.cinematic.sections.operational_risk')}</div>
             <div className="fax-grid">
-              <div className="fax-row"><span className="fax-label">DIFFICULTY</span> <span className="fax-value">{safeDifficulty.toUpperCase()}</span></div>
-              <div className="fax-row"><span className="fax-label">FAILURE MODE</span> <span className="fax-value">{safeFailureType.toUpperCase()}</span></div>
+              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.difficulty')}</span> <span className="fax-value">{t(`initialization.difficulty.${safeDifficulty}`)}</span></div>
+              <div className="fax-row"><span className="fax-label">{t('ui.cinematic.labels.failure_mode')}</span> <span className="fax-value">{t(`ui.cinematic.failure_modes.${safeFailureType}`)}</span></div>
             </div>
           </div>
 
@@ -155,10 +148,12 @@ CinematicReview.propTypes = {
     windSpeed: PropTypes.number,
     visibility: PropTypes.number,
     cloudCover: PropTypes.number,
-    turbulence: PropTypes.string
+    turbulence: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    source: PropTypes.string
   }),
   crewCount: PropTypes.number,
   failureType: PropTypes.string,
+  failureSelection: PropTypes.shape({ mode: PropTypes.string }),
   difficulty: PropTypes.string,
   pax: PropTypes.number,
   payload: PropTypes.number,

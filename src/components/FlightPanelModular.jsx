@@ -120,8 +120,12 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     frame: flightData?.frame ?? 0
   });
   
-  // Update flightState when flightData changes
-  useEffect(() => {
+  // Adjust this component's state before committing children. A passive effect
+  // here schedules another commit on every telemetry frame and can accumulate
+  // nested passive updates while the physics loop keeps publishing snapshots.
+  const [previousTelemetry, setPreviousTelemetry] = useState(null);
+  if (!previousTelemetry || previousTelemetry.flightData !== flightData || previousTelemetry.weatherData !== weatherData) {
+    setPreviousTelemetry({ flightData, weatherData });
     if (flightData) {
       setFlightState(prevState => {
         const nextState = {
@@ -226,7 +230,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
         return nextState;
       });
     }
-  }, [flightData, weatherData]);
+  }
   
   const [showCrashPanel, setShowCrashPanel] = useState(false);
 
@@ -413,7 +417,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
       // Narrative Overlay REMOVED as requested (using Head Bar instead)
 
       // Three parallel panels
-      React.createElement(AircraftMainPanelReplica, { aircraftModel, flightState, flightPlan, npcs, onAutopilotAction: onActionRequest, className: efisFontClass },
+      React.createElement(AircraftMainPanelReplica, { aircraftModel, flightState, physicsService, flightPlan, npcs, onAutopilotAction: onActionRequest, className: efisFontClass },
         // Flight Pose Panel (Left)
         React.createElement(FlightPosePanel, { flightState, efisFontFamily }),
 
@@ -439,7 +443,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
     );
   };
 
-  const visual = cockpitVisualState(flightState.systems, weatherData);
+  const visual = cockpitVisualState(flightState.systems, weatherData, flightState.derived?.altitude_ft ?? flightState.altitude);
   const daylight = daylightFactor(parseZuluTime(timeZulu, weatherData?.zuluTime), flightState.latitude || 0, flightState.longitude || 0);
   const surroundLight = (1 - daylight) * (visual.dome ? .4 : visual.background ? .22 : 0);
   const panelSpill = (1 - daylight) * (visual.flood ? 1 : visual.panel ? .85 : visual.dome ? .55 : visual.background ? .3 : .08);

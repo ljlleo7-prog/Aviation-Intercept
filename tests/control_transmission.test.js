@@ -101,3 +101,13 @@ test('manual-reversion travel is time based and release centers immediately', ()
   assert.ok(Math.abs(integrate(0.01) - integrate(0.1)) < 1e-9);
   assert.equal(advanceControlPosition(0.3, 0, 1, 0.1, true), 0);
 });
+
+test('powered controls keep their smooth return instead of cable-only centering', () => {
+  assert.ok(Math.abs(advanceControlPosition(0.3, 0, 0.2, 0.02, false) - 0.24) < 1e-9);
+  assert.equal(advanceControlPosition(0.3, 0, 0.2, 0.02, true), 0);
+  const powered = serviceFor(boeing);
+  powered.systems.resourceNetwork = { resources: ['hydraulic_A'] };
+  powered.controls.aileron = 0.3;
+  powered.processInputs({ roll: 0 }, 0.02);
+  assert.ok(powered.controls.aileron > 0 && powered.controls.aileron < 0.3);
+});

@@ -1,13 +1,14 @@
 const DEG = Math.PI / 180;
 const smoothstep = (value, min, max) => { const x = Math.max(0, Math.min(1, (value - min) / (max - min))); return x * x * (3 - 2 * x); };
-export function cockpitVisualState(systems = {}, weather = {}) {
+export function cockpitVisualState(systems = {}, weather = {}, altitudeFt = 0) {
   const electrical = systems.electrical;
   const dc = (electrical?.dcVolts ?? 0) > 20;
   const ac = (electrical?.acVolts ?? 0) > 100;
   const code = Number(weather.weatherCode ?? weather.weather_code ?? 0);
   const snow = [71, 73, 75, 77, 85, 86].includes(code) || Number(weather.snowfall) > 0;
   const wet = snow || [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || Number(weather.precipitation) > 0;
-  const intensity = wet ? Math.min(1, Math.max(.25, Number(weather.precipitation || 1) / 5)) : 0;
+  const rainScale = snow ? 1 : 1 - smoothstep(Number.isFinite(altitudeFt) ? altitudeFt : 0, 8000, 12000);
+  const intensity = wet ? Math.min(1, Math.max(.25, Number(weather.precipitation || 1) / 5)) * rainScale : 0;
   const on = value => value === true || (typeof value === 'number' && value > 0) || ['ON', 'LOW', 'HIGH', 'AUTO', 'TAXI', 'TO', 'TAKEOFF'].includes(String(value).toUpperCase());
   const lighting = systems.lighting || {};
   return {
@@ -19,7 +20,7 @@ export function cockpitVisualState(systems = {}, weather = {}) {
     panel: dc && on(lighting.panel), dome: dc && on(lighting.dome),
     leftWiper: ac && on(systems.wipers?.left), rightWiper: ac && on(systems.wipers?.right),
     snow, intensity,
-    visibilityLimit: wet ? (snow ? 3500 : 7000) / (1 + intensity * 2) : Infinity,
+    visibilityLimit: wet && rainScale > 0 ? (snow ? 3500 : 7000) / ((1 + intensity * 2) * rainScale) : Infinity,
   };
 }
 export const parseZuluTime = (selectedTime, weatherTime) => {

@@ -230,7 +230,7 @@ test('Autopilot normalizes target settings', async () => {
   assert.equal(status.targets.heading, 95);
 });
 
-test('Autopilot commands stronger recovery while below selected altitude and still descending', async () => {
+test('Autopilot uses independent HOLD to recover below selected altitude', async () => {
   const aircraft = await getAircraft();
   const physics = new RealisticFlightPhysicsService(aircraft, 34.0, -118.0, 'intermediate');
   physics.setInitialConditions({ latitude: 34.0, longitude: -118.0, position: { z: 9700 * 0.3048 }, heading: 90, fuel: 5000, coldStart: false });
@@ -241,8 +241,10 @@ test('Autopilot commands stronger recovery while below selected altitude and sti
   const state = runSteps(physics, { throttle: 0.55, pitch: 0, roll: 0, yaw: 0, trim: 0, flaps: 0, gear: false }, 120);
 
   assert.ok((state.derived?.altitude ?? 0) < 9800, `Altitude ${(state.derived?.altitude ?? 0).toFixed(0)}ft should still be meaningfully below target in this recovery scenario`);
-  assert.ok((state.verticalSpeed ?? 0) < 0, `Vertical speed ${(state.verticalSpeed ?? 0).toFixed(0)}fpm should still show descending momentum before recovery`);
-  assert.ok((state.autopilotTargets?.vs ?? 0) >= 1200, `Target VS ${(state.autopilotTargets?.vs ?? 0).toFixed(0)}fpm should command stronger recovery while diverging below target`);
+  assert.equal(state.autopilotDebug?.verticalControl, 'altitude');
+  assert.equal(state.autopilotDebug?.altitudeMode, 'hold');
+  assert.equal(state.autopilotTargets?.vs, 0, 'HOLD must not select a recovery V/S');
+  assert.ok(state.autopilotDebug?.targetPitch > 0, 'HOLD must command nose-up recovery');
 });
 
 test('Autopilot enters capture mode before selected altitude overshoot band', async () => {

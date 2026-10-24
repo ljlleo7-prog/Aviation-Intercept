@@ -193,6 +193,7 @@ function appendSampledPoints(target, sampledPoints) {
 
 export function buildFlyByTurn(previousWaypoint, waypoint, nextWaypoint, options = {}) {
     if (!previousWaypoint || !waypoint || !nextWaypoint) return null;
+    if (waypoint.isHold || waypoint.flyOver || waypoint.isFlyOver || waypoint.sequencingMode === 'manual') return null;
     const coordinates = [previousWaypoint, waypoint, nextWaypoint];
     if (coordinates.some((point) => !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude))) {
         return null;
@@ -225,15 +226,16 @@ export function buildFlyByTurn(previousWaypoint, waypoint, nextWaypoint, options
 
     const cross = (inbound.x * outbound.y) - (inbound.y * outbound.x);
     const turnDirection = cross >= 0 ? 'left' : 'right';
-    const radiusMeters = Math.max(150, options.turnRadiusMeters ?? 1852);
+    const requestedRadius = Math.max(150, options.turnRadiusMeters ?? 1852);
     const inboundLength = inbound.length;
     const outboundLength = outbound.length;
-    const desiredLead = radiusMeters * Math.tan(turnAngle / 2);
-    const maxLead = Math.max(0, Math.min(inboundLength, outboundLength) - 50);
+    const desiredLead = requestedRadius * Math.tan(turnAngle / 2);
+    const maxLead = Math.max(0, Math.min(inboundLength, outboundLength) * 0.45);
     const leadDistance = Math.min(desiredLead, maxLead);
     if (!Number.isFinite(leadDistance) || leadDistance < 25) {
         return null;
     }
+    const radiusMeters = leadDistance / Math.tan(turnAngle / 2);
 
     const entry = {
         x: currentLocal.x - inbound.x * leadDistance,

@@ -10,7 +10,10 @@ import FlightInProgress from './components/FlightInProgress.jsx';
 import RouteSelectionFrame from './components/RouteSelectionFrame.jsx';
 import NarrativeScene from './components/NarrativeScene.jsx';
 import { generateInitialWeather } from './services/weatherService';
+import { realWeatherService } from './services/RealWeatherService.js';
+import { loadBriefingWeather } from './services/briefingWeather.js';
 import { buildAutoRouteDetails, buildRouteAuthState, DEFAULT_ROUTE_DETAILS, mergeFlightPlanWithRoute, normalizeRouteDetails, normalizeWaypoint } from './utils/routeDetails.js';
+import { confirmRouteSelection } from './utils/confirmRouteSelection.js';
 
 import { FadeOverlay, CinematicReview } from './components/CinematicComponents.jsx';
 import { LanguageProvider, TranslatedText } from './contexts/LanguageContext';
@@ -39,7 +42,8 @@ const DEFAULT_APP_SETTINGS = {
 const DEFAULT_WEATHER = {
   type: 'clear',
   windSpeed: 0,
-  visibility: 10,
+  visibility: 10000,
+  cloudCover: 0,
   ceiling: 5000,
   precipitation: 0,
   turbulence: 0
@@ -119,6 +123,7 @@ function App() {
   const [arrivalQuery, setArrivalQuery] = useState('');
   const [alternateQuery, setAlternateQuery] = useState('');
   const routeGenerationRequestRef = useRef(0);
+  const routeConfirmationRevisionRef = useRef(0);
 
   const offlineMode = appSettings.offlineMode;
   const activeUser = offlineMode ? null : authUser;
@@ -188,7 +193,9 @@ function App() {
   };
 
   const setPreflightDeparture = async (airport) => {
+    const revision = routeConfirmationRevisionRef.current;
     const resolvedAirport = await resolveAirportDetails(airport);
+    if (revision !== routeConfirmationRevisionRef.current) return;
     selectDeparture(resolvedAirport);
     setDepartureQuery('');
     const routeDetails = normalizeRouteDetails(preflightConfig.routeDetails, resolvedAirport, preflightConfig.selectedArrival);
@@ -205,7 +212,9 @@ function App() {
   };
 
   const setPreflightArrival = async (airport) => {
+    const revision = routeConfirmationRevisionRef.current;
     const resolvedAirport = await resolveAirportDetails(airport);
+    if (revision !== routeConfirmationRevisionRef.current) return;
     selectArrival(resolvedAirport);
     setArrivalQuery('');
     const routeDetails = normalizeRouteDetails(preflightConfig.routeDetails, preflightConfig.selectedDeparture, resolvedAirport);
@@ -421,14 +430,19 @@ function App() {
   };
 
   const handleRouteConfirm = (routeData) => {
-    if (routeData.departure) setPreflightDeparture(routeData.departure);
-    if (routeData.arrival) setPreflightArrival(routeData.arrival);
-    updateRouteDetails(routeData);
+    // Cancel pending airport route lookups so they cannot overwrite the reviewed runway.
+    routeGenerationRequestRef.current += 1;
+    routeConfirmationRevisionRef.current += 1;
+    if (routeData.departure) selectDeparture(routeData.departure);
+    if (routeData.arrival) selectArrival(routeData.arrival);
+    setPreflightConfig(previous => confirmRouteSelection(previous, routeData));
     setShowRouteSelection(false);
     startSimulation(routeData);
   };
 
   const handleRouteSkip = () => {
+    routeGenerationRequestRef.current += 1;
+    routeConfirmationRevisionRef.current += 1;
     setShowRouteSelection(false);
     updateRouteDetails(DEFAULT_ROUTE_DETAILS);
     startSimulation(DEFAULT_ROUTE_DETAILS);
@@ -484,7 +498,7 @@ function App() {
     }
   };
 
-  const startSimulation = () => {
+  const startSimulation = async (routeData = {}) => {
     const fadeDuration = 2500;
 
     let currentSeason = season;
@@ -500,23 +514,26 @@ function App() {
       updatePreflightConfig({ timeZulu: currentTimeZulu });
     }
 
-    const departureAirport = preflightConfig.selectedDeparture;
-    if (departureAirport && offlineMode) {
-      const initialWeather = generateInitialWeather(
-        departureAirport.latitude,
-        departureAirport.longitude,
-        currentSeason,
-        currentTimeZulu
-      );
-      setWeatherData(initialWeather);
-      updatePreflightConfig({ weatherData: initialWeather });
-    }
-
     setCinematicPhase('fade_out');
-
-    setTimeout(() => {
-      setCinematicPhase('cinematic_review');
-    }, fadeDuration);
+    const [initialWeather] = await Promise.all([
+      loadBriefingWeather(routeData.departure || preflightConfig.selectedDeparture, {
+        offlineMode,
+        season: currentSeason,
+        zuluTime: currentTimeZulu,
+        generateWeather: (...args) => {
+          const weather = generateInitialWeather(...args);
+          return {
+            ...weather,
+            turbulence: realWeatherService.estimateTurbulence(weather.windSpeed, weather.windGust, 0)
+          };
+        },
+        getWeather: (...args) => realWeatherService.getWeather(...args)
+      }),
+      new Promise(resolve => setTimeout(resolve, fadeDuration))
+    ]);
+    setWeatherData(initialWeather);
+    updatePreflightConfig({ weatherData: initialWeather });
+    setCinematicPhase('cinematic_review');
   };
 
   const handleCinematicReviewComplete = () => {
@@ -692,6 +709,7 @@ function App() {
               setWeatherData={setWeatherData}
               crewCount={crewCount}
               failureType={failureType}
+              failureSelection={preflightConfig.failureSelection}
               difficulty={difficulty}
               pax={pax}
               payload={payload}

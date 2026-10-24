@@ -600,7 +600,23 @@ const en = {
             landing_rwy: 'LANDING RWY',
             sid: 'SID',
             star: 'STAR',
-            waypoints: 'WAYPOINTS:'
+            waypoints: 'WAYPOINTS:',
+            wind: 'WIND',
+            visibility: 'VISIBILITY',
+            turbulence: 'TURBULENCE',
+            cloud_cover: 'CLOUD COVER',
+            difficulty: 'DIFFICULTY',
+            failure_mode: 'FAILURE MODE'
+        },
+        units: { knots: 'KTS', km: 'KM' },
+        turbulence: { none: 'NONE', light: 'LIGHT', moderate: 'MODERATE', severe: 'SEVERE', extreme: 'EXTREME', unavailable: 'UNAVAILABLE' },
+        failure_modes: { normal: 'NORMAL SIMULATION', custom: 'CUSTOM FAILURES', none: 'NONE', random: 'RANDOM', fixed: 'FIXED' },
+        weather_sources: {
+            live: 'Live departure weather; visibility and turbulence are estimated.',
+            simulated: 'Simulated departure weather (offline).',
+            fallback: 'Simulated departure weather (live weather unavailable).',
+            configured: 'Configured scenario weather.',
+            unavailable: 'Departure weather unavailable.'
         },
         buttons: {
             acknowledge: 'ACKNOWLEDGE DISPATCH'

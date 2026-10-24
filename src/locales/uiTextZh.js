@@ -1,5 +1,13 @@
 // English source text is the lookup key for UI introduced after the original locale catalog.
 export default {
+  "Flight summary": "飞行概况",
+  "Manual flight": "手动飞行",
+  "Reference points": "参考点",
+  "Drag INTCP along the runway extension (minimum 2 NM). Drag reference points freely.": "沿跑道延长线拖动 INTCP（最小 2 海里）。其他参考点可自由拖动。",
+  "Select a runway and a route with waypoint coordinates to edit.": "请选择跑道及具有航路点坐标的航路进行编辑。",
+  "Insert midpoint": "插入中点",
+  "Reset points": "重置参考点",
+  "Route uses measured AIP waypoints connected by DCT legs; these are not published airways.": "航路使用 AIP 实际航路点，以 DCT 直飞航段连接；这些航段并非公布的航路。",
   "AIP data packs": "AIP 数据包",
   "Import the World AIP ZIP to store airports, runways, frequencies, navaids, and routes in this browser. Installed data is used before cloud lookups and costs no credits.": "导入全球 AIP ZIP，将机场、跑道、频率、导航台和航路存储在当前浏览器中。优先使用已安装的数据，不消耗积分。",
   "Cloud AIP requests require login and cost 1 credit per request, with a shared quota of 10 requests per minute. Cached results cost no additional credits.": "云端 AIP 请求需要登录，每次消耗 1 积分，共享每分钟 10 次的配额。缓存结果不额外消耗积分。",

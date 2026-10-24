@@ -11,6 +11,7 @@ import {
 } from '../utils/routeGenerator';
 import LocalRouteMap from './LocalRouteMap';
 import ProcedureMiniMap from './ProcedureMiniMap.jsx';
+import { applyProcedureEdits } from '../utils/procedureEditor.js';
 import { calculateDistance } from '../utils/distanceCalculator';
 
 const calcRouteDistance = (departure, waypoints, arrival) => {
@@ -373,6 +374,7 @@ const RouteSelectionFrame = ({
         {/* 2 — Route */}
         {departure && arrival && showWaypoints && (
           <Section step="2" title={`${tx('Enroute')} ${routeDistance ? `· ${routeDistance} nm` : ''}`}>
+            {selectedAlternative?.family === 'relaxed' && <p style={{ color: '#fbbf24', fontSize: '12px' }}>{tx('Route uses measured AIP waypoints connected by DCT legs; these are not published airways.')}</p>}
             {routeAlternatives.length > 1 && (
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{tx("Route Alternatives (")}{routeAlternatives.length})
@@ -406,8 +408,8 @@ const RouteSelectionFrame = ({
               <input type="checkbox" checked={relaxAirways} onChange={e => handleRelaxAirwaysChange(e.target.checked)} />{tx("Relax airway limits (direct fallback legs)")}</label>
 
             <LocalRouteMap
-              departure={departure} arrival={arrival} waypoints={routeData.waypoints}
-              routeObject={{ ...(routeData.routeObject || {}), procedureSegments: routeData.procedureSegments || [], waypoints: routeData.routeObject?.waypoints || routeData.waypoints }}
+              departure={departure} arrival={arrival} waypoints={applyProcedureEdits(routeData.waypoints, routeData.departureProcedure, routeData.arrivalProcedure)}
+              routeObject={{ ...(routeData.routeObject || {}), procedureSegments: routeData.departureProcedure || routeData.arrivalProcedure ? [] : routeData.procedureSegments || [], waypoints: applyProcedureEdits(routeData.routeObject?.waypoints || routeData.waypoints, routeData.departureProcedure, routeData.arrivalProcedure) }}
             />
 
             {routeData.routeSource && (
@@ -460,7 +462,7 @@ const RouteSelectionFrame = ({
                 </div>
               )}
             </div>
-            <ProcedureMiniMap airport={departure} runwayName={routeData.departureRunway} procedureName={routeData.sid} procedureSegments={routeData.procedureSegments || []} waypoints={routeData.waypoints || []} side="departure" />
+            <ProcedureMiniMap airport={departure} runwayName={routeData.departureRunway} procedureName={routeData.sid} value={routeData.departureProcedure} onChange={value => handleChange('departureProcedure', value)} waypoints={routeData.waypoints || []} side="departure" />
           </Section>
         )}
 
@@ -498,7 +500,7 @@ const RouteSelectionFrame = ({
                 </div>
               </div>
             </div>
-            <ProcedureMiniMap airport={arrival} runwayName={routeData.landingRunway} procedureName={routeData.star} procedureSegments={routeData.procedureSegments || []} waypoints={routeData.waypoints || []} side="arrival" />
+            <ProcedureMiniMap airport={arrival} runwayName={routeData.landingRunway} procedureName={routeData.star} value={routeData.arrivalProcedure} onChange={value => handleChange('arrivalProcedure', value)} waypoints={routeData.waypoints || []} side="arrival" />
           </Section>
         )}
 
@@ -511,7 +513,7 @@ const RouteSelectionFrame = ({
             className="confirm-btn"
             style={{ flex: 2 }}
             onClick={() => onConfirm({ ...routeData, departure, arrival })}
-            disabled={!isFormValid()}
+            disabled={!isFormValid() || isGeneratingRoute}
           >{tx("Confirm Flight Plan")}</button>
         </div>
     </div>

@@ -75,7 +75,7 @@ class RealWeatherService {
    * @param {number} lon Longitude
    * @returns {Promise<Object>} Weather data
    */
-  async getWeather(lat, lon) {
+  async getWeather(lat, lon, { signal } = {}) {
     const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
     const now = Date.now();
 
@@ -108,7 +108,7 @@ class RealWeatherService {
         precipitation_unit: 'mm',
       });
 
-      const response = await fetch(`${BASE_URL}?${params.toString()}`);
+      const response = await fetch(`${BASE_URL}?${params.toString()}`, { signal });
       if (!response.ok) {
         throw new Error(`Weather API error: ${response.statusText}`);
       }
@@ -126,6 +126,7 @@ class RealWeatherService {
       console.error('Failed to fetch real weather:', error);
       // Return a safe fallback (Standard Atmosphere)
       return {
+        source: 'fallback',
         temperature: 15,
         humidity: 50,
         pressure: 1013.25,

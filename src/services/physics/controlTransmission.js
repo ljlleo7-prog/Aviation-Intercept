@@ -20,9 +20,9 @@ export function hydraulicAssistAvailable(systems = {}) {
 }
 
 export function advanceControlPosition(current, target, response, dt, manualReversion, releaseToCenter = true) {
-  // Unloaded controls snap to neutral; hydraulic resistance applies to pushing
-  // against the load, not to the released return. Jams are handled before this.
-  if (releaseToCenter && Math.abs(target) < 0.0001) return 0;
+  // Only unpowered cable/manual reversion snaps back under load. Powered
+  // controls retain their normal smoothing. Jams are handled before this.
+  if (manualReversion && releaseToCenter && Math.abs(target) < 0.0001) return 0;
   if (!manualReversion) return current + (clamp(target) - current) * response;
   // Simulation proxy for pilot effort: reaching full travel requires a sustained
   // hold. Preserve the requested final deflection instead of scaling authority.

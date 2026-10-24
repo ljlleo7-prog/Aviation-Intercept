@@ -19,7 +19,7 @@ new Function('require', 'module', 'exports', compiled.outputFiles[0].text)(creat
 const render = module.exports.render;
 
 test('both linked yokes and pedals render the actual slow or jammed control position', () => {
-  const html = render({ controlFeedback: { mechanical: true }, controls: { pitch: 0.15, roll: 0.15, yaw: 0.5 } });
+  const html = render({ controlFeedback: { mechanical: true }, controls: { pitch: -0.15 * 25 * Math.PI / 180, roll: 0.15 * 30 * Math.PI / 180, yaw: 0.5 * 30 * Math.PI / 180 } });
   assert.equal((html.match(/translate\(0 7.5\) rotate\(20 100 80\)/g) || []).length, 2);
   assert.equal((html.match(/translateY\(4.5px\)/g) || []).length, 2);
   assert.equal((html.match(/translateY\(-4.5px\)/g) || []).length, 2);

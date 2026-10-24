@@ -24,6 +24,11 @@ export function usePhysicsLoop(physicsService, onUpdate) {
 
     for (let i = 0; i < iterations; i++) {
       newState = service.update(controls, fixedDt);
+      if (newState.autopilotDebug?.altitudeRecoveryActive && timeScaleRef.current > 1) {
+        timeScaleRef.current = 1;
+        setTimeScaleState(1);
+        break;
+      }
       if (newState.hasCrashed) break;
     }
 

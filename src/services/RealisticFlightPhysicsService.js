@@ -420,12 +420,15 @@ class RealisticFlightPhysicsService {
         };
 
         // --- Waypoint Sequencing & LNAV ---
+        this.autopilot.setPathGuidance(null);
         if (this.flightPlan && this.flightPlan.length > 0) {
+            const navigationSpeedMs = Math.max(0, apState.groundSpeed || apState.airspeed || 0) * 0.514444;
+            const predictedTurnRadius = navigationSpeedMs ** 2 / (9.80665 * Math.tan(25 * Math.PI / 180));
             const navUpdate = this.navigationService.update(apState, {
                 flightPlan: this.flightPlan,
                 currentWaypointIndex: this.currentWaypointIndex,
                 previousDistanceToWaypoint: this._prevDistToWaypoint,
-                turnRadiusMeters: 1852,
+                turnRadiusMeters: Math.max(150, Math.round(predictedTurnRadius / 250) * 250),
                 sampleSpacingMeters: 250
             });
 
@@ -450,6 +453,7 @@ class RealisticFlightPhysicsService {
                 }
 
                 if (this.autopilot.mode === 'LNAV' && Number.isFinite(navUpdate.targetHeading)) {
+                    this.autopilot.setPathGuidance(navUpdate.targetHeading);
                     this.autopilot.setTargets({ heading: navUpdate.targetHeading });
                 }
 

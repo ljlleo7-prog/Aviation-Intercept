@@ -1,115 +1,96 @@
-import React, { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import { airportService } from '../services/airportService.js';
-import { buildSyntheticSIDWaypoints, buildSyntheticSTARWaypoints } from '../utils/routeDetails.js';
+import { useLanguage } from '../contexts/LanguageContext';
+import { localPoint, geographicPoint, interceptPoint, constrainIntercept, insertProcedurePoint, procedureEndpoint, procedureKey, MAX_PROCEDURE_POINTS } from '../utils/procedureEditor.js';
+import './ProcedureMiniMap.css';
 
-const toPoint = (point) => {
-  if (!point || point.latitude == null || point.longitude == null) return null;
-  const latitude = Number(point.latitude);
-  const longitude = Number(point.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  return { ...point, latitude, longitude, name: point.name || point.label || point.identifier || 'FIX' };
-};
-
-const buildSyntheticFinal = (airport, runwayName, waypoints) => {
-  const lastWaypoint = waypoints.at(-1);
-  if (!airport || !lastWaypoint || !runwayName) return [];
-  return [
-    ...buildSyntheticSTARWaypoints(airport, runwayName, lastWaypoint),
-    { ...airport, name: runwayName, type: 'RUNWAY_FIX' }
-  ].map(toPoint).filter(Boolean);
-};
-
-const buildSyntheticDeparture = (airport, runwayName, waypoints) => {
-  const firstWaypoint = waypoints[0];
-  if (!airport || !firstWaypoint || !runwayName) return [];
-  return buildSyntheticSIDWaypoints(airport, runwayName, firstWaypoint).map(toPoint).filter(Boolean);
-};
-
-const ProcedureMiniMap = ({ airport, runwayName, procedureName = '', procedureSegments = [], waypoints = [], side = 'departure', height = 150 }) => {
-  const preview = useMemo(() => {
-    const airportCode = airport?.icao || airport?.iata;
-    const runwayGeometry = airportCode && runwayName ? airportService.getRunwayGeometry(airportCode, runwayName) : null;
-    const segmentKinds = side === 'departure' ? ['sid'] : ['star', 'approach'];
-    const procedurePoints = procedureSegments
-      .filter((segment) => segmentKinds.includes(segment.kind || segment.segment))
-      .flatMap((segment) => segment.waypoints || [])
-      .map(toPoint)
-      .filter(Boolean);
-    const fallbackPoints = side === 'departure'
-      ? buildSyntheticDeparture(airport, runwayName, waypoints.slice(0, 2))
-      : buildSyntheticFinal(airport, runwayName, waypoints.slice(-2));
-    const routePoints = procedurePoints.length ? procedurePoints : fallbackPoints;
-    const runwayPoints = runwayGeometry
-      ? [
-          toPoint({ ...runwayGeometry.thresholdStart, name: `${runwayName} A`, type: 'RUNWAY_THRESHOLD' }),
-          toPoint({ ...runwayGeometry.thresholdEnd, name: `${runwayName} B`, type: 'RUNWAY_THRESHOLD' })
-        ].filter(Boolean)
-      : airport ? [toPoint({ ...airport, name: airportCode || 'APT', type: 'AIRPORT' })].filter(Boolean) : [];
-    const points = side === 'departure' ? [...runwayPoints, ...routePoints] : [...routePoints, ...runwayPoints];
-    return { runwayGeometry, runwayPoints, routePoints, points, hasPublishedProcedure: procedurePoints.length > 0 };
-  }, [airport, procedureSegments, runwayName, side, waypoints]);
-
-  const bounds = useMemo(() => {
-    if (!preview.points.length) return null;
-    const lats = preview.points.map((point) => point.latitude);
-    const lons = preview.points.map((point) => point.longitude);
-    return {
-      minLat: Math.min(...lats),
-      maxLat: Math.max(...lats),
-      minLon: Math.min(...lons),
-      maxLon: Math.max(...lons)
-    };
-  }, [preview.points]);
-
-  const project = (point) => {
-    if (!bounds) return { x: 50, y: 50 };
-    const latSpan = Math.max(bounds.maxLat - bounds.minLat, 0.02);
-    const lonSpan = Math.max(bounds.maxLon - bounds.minLon, 0.02);
-    return {
-      x: 8 + ((point.longitude - bounds.minLon) / lonSpan) * 84,
-      y: 92 - ((point.latitude - bounds.minLat) / latSpan) * 84
-    };
+const ProcedureMiniMap = ({ airport, runwayName, procedureName = '', waypoints = [], side = 'departure', value, onChange }) => {
+  const { tx } = useLanguage();
+  const svg = useRef(null);
+  const dragging = useRef(null);
+  const [dragProjection, setDragProjection] = useState(null);
+  const code = airport?.icao || airport?.iata;
+  const endpoint = airport && procedureEndpoint(waypoints, airport, side);
+  const runways = useMemo(() => {
+    if (!airport) return [];
+    return (airport.runways?.length ? airport.runways : airportService.getRunwayInfo(code)).map(runway => {
+      const name = String(runway.name || '');
+      const geometry = airportService.getRunwayGeometry(code, name.split(/[/-]/)[0]);
+      if (geometry) return { ...geometry, name };
+      const hasThresholds = [runway.startLatitude, runway.startLongitude, runway.endLatitude, runway.endLongitude].every(v => v != null && Number.isFinite(Number(v)));
+      const thresholdStart = hasThresholds ? { latitude: Number(runway.startLatitude), longitude: Number(runway.startLongitude) } : null;
+      const thresholdEnd = hasThresholds ? { latitude: Number(runway.endLatitude), longitude: Number(runway.endLongitude) } : null;
+      const offset = hasThresholds ? localPoint(thresholdStart, thresholdEnd) : null;
+      const heading = runway.bearing != null && Number.isFinite(Number(runway.bearing)) ? Number(runway.bearing) : offset ? (Math.atan2(offset.x, offset.y) * 180 / Math.PI + 360) % 360 : parseInt(name, 10) * 10;
+      if (!Number.isFinite(heading)) return null;
+      const half = (Number(runway.length) || 6000) * 0.3048 / 1852 / 2;
+      return { name, heading, thresholdStart: thresholdStart || interceptPoint(airport, heading, half, 'arrival'), thresholdEnd: thresholdEnd || interceptPoint(airport, heading, half, 'departure') };
+    }).filter(Boolean);
+  }, [airport, code]);
+  const selected = code && runwayName ? airportService.getRunwayGeometry(code, runwayName) : null;
+  const reference = runways.find(runway => runway.name.split(/[/-]/).includes(runwayName));
+  const reciprocal = reference && runwayName === reference.name.split(/[/-]/)[1];
+  const geometry = selected || (reference && { ...reference, heading: (reference.heading + (reciprocal ? 180 : 0)) % 360, thresholdStart: reciprocal ? reference.thresholdEnd : reference.thresholdStart });
+  const origin = geometry?.thresholdStart || airport;
+  const key = airport && procedureKey(airport, runwayName, endpoint, side);
+  const initial = geometry && endpoint ? [interceptPoint(origin, geometry.heading, side === 'departure' ? 8 : 12, side)] : [];
+  const points = value?.key === key ? value.points : initial;
+  useEffect(() => {
+    if (onChange && geometry && endpoint && value?.key !== key) onChange({ key, endpoint, origin, points: initial, airportCode: code, runwayName });
+  });
+  const commit = next => onChange?.({ key, endpoint, origin, points: next, airportCode: code, runwayName });
+  const chain = endpoint ? side === 'departure' ? [origin, ...points, endpoint] : [endpoint, ...points, origin] : [];
+  const all = [...chain, ...runways.flatMap(runway => [runway.thresholdStart, runway.thresholdEnd])].filter(Boolean);
+  const local = origin ? all.map(point => localPoint(origin, point)) : [];
+  const xs = local.map(point => point.x); const ys = local.map(point => point.y);
+  const minX = Math.min(-3, ...xs); const maxX = Math.max(3, ...xs);
+  const minY = Math.min(-3, ...ys); const maxY = Math.max(3, ...ys);
+  const projection = { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, scale: Math.min(400 / (maxX - minX), 300 / (maxY - minY)) };
+  // Keep the scale fixed throughout a drag.
+  const activeProjection = dragProjection || projection;
+  const project = point => {
+    const p = localPoint(origin, point);
+    return { x: 250 + (p.x - activeProjection.cx) * activeProjection.scale, y: 200 - (p.y - activeProjection.cy) * activeProjection.scale };
   };
-
-  if (!airport) {
-    return <div className="procedure-mini-map empty" style={{ height }}>Select airport for procedure preview.</div>;
-  }
-
-  const routePath = preview.routePoints.map((point) => {
-    const p = project(point);
-    return `${p.x},${p.y}`;
-  }).join(' ');
-  const runwayPath = preview.runwayPoints.map((point) => {
-    const p = project(point);
-    return `${p.x},${p.y}`;
-  }).join(' ');
-  const color = side === 'departure' ? '#22c55e' : '#f59e0b';
-
-  return (
-    <div className="procedure-mini-map" style={{ height }}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="procedure-mini-map-svg">
-        <rect x="0" y="0" width="100" height="100" fill="#020617" />
-        {[25, 50, 75].map((value) => <line key={`g-${value}`} x1={value} y1="0" x2={value} y2="100" stroke="rgba(148,163,184,0.12)" strokeWidth="0.5" />)}
-        {[25, 50, 75].map((value) => <line key={`h-${value}`} x1="0" y1={value} x2="100" y2={value} stroke="rgba(148,163,184,0.12)" strokeWidth="0.5" />)}
-        {runwayPath && <polyline points={runwayPath} fill="none" stroke="#facc15" strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
-        {routePath && <polyline points={routePath} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-        {preview.routePoints.map((point, index) => {
-          const p = project(point);
-          return (
-            <g key={`${point.name}-${index}`}>
-              <circle cx={p.x} cy={p.y} r="1.4" fill={color} vectorEffect="non-scaling-stroke" />
-              <text x={Math.min(p.x + 2, 84)} y={Math.max(p.y - 1, 6)} fill="#e0f2fe" fontSize="3" fontFamily="monospace" style={{ paintOrder: 'stroke', stroke: '#020617', strokeWidth: 0.8 }}>
-                {point.name}
-              </text>
-            </g>
-          );
-        })}
+  const path = list => list.map(point => { const p = project(point); return `${p.x},${p.y}`; }).join(' ');
+  const move = event => {
+    const drag = dragging.current;
+    if (!drag || !svg.current) return;
+    const screen = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.current.getScreenCTM().inverse());
+    const coordinate = geographicPoint(origin, { x: (screen.x - 250) / drag.projection.scale + drag.projection.cx, y: (200 - screen.y) / drag.projection.scale + drag.projection.cy });
+    const next = [...points];
+    next[drag.index] = points[drag.index].kind === 'intercept' ? constrainIntercept(origin, geometry.heading, coordinate, side) : { ...points[drag.index], ...coordinate };
+    commit(next);
+  };
+  const finish = event => { dragging.current = null; setDragProjection(null); if (svg.current?.hasPointerCapture(event.pointerId)) svg.current.releasePointerCapture(event.pointerId); };
+  if (!airport) return <p>{tx('Select airport for procedure preview.')}</p>;
+  return <div className="procedure-editor">
+    <div className="procedure-editor-view">
+      <svg ref={svg} viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet" onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} aria-label={`${side === 'departure' ? 'SID' : 'STAR'} ${code} ${runwayName}`}>
+        <rect width="500" height="400" fill="#020617" /><text x="460" y="25" fill="#cbd5e1">N ↑</text>
+        {geometry && <polyline points={path([origin, interceptPoint(origin, geometry.heading, Math.max(30, Math.hypot(maxX - minX, maxY - minY)), side)])} stroke="#64748b" strokeDasharray="5 5" fill="none" />}
+        {origin && runways.map(runway => <g key={runway.name}><polyline points={path([runway.thresholdStart, runway.thresholdEnd])} stroke={runway.name.split(/[/-]/).includes(runwayName) ? '#facc15' : '#64748b'} strokeWidth="5" /><text x={project(runway.thresholdEnd).x + 5} y={project(runway.thresholdEnd).y - 5} fill="#94a3b8" fontSize="10">{runway.name}</text></g>)}
+        {chain.length > 0 && <polyline points={path(chain)} stroke={side === 'departure' ? '#22c55e' : '#f59e0b'} strokeWidth="2" fill="none" />}
+        {origin && <g><circle cx={project(origin).x} cy={project(origin).y} r="5" fill="white" /><text x={project(origin).x + 8} y={project(origin).y + 15} fill="white" fontSize="11">{code}</text></g>}
+        {endpoint && <g><circle cx={project(endpoint).x} cy={project(endpoint).y} r="5" fill="#38bdf8" /><text x={project(endpoint).x + 8} y={project(endpoint).y} fill="white" fontSize="11">{endpoint.name || endpoint.label}</text></g>}
+        {points.map((point, index) => { const p = project(point); return <g key={index}><circle cx={p.x} cy={p.y} r="10" fill={point.kind === 'intercept' ? '#facc15' : '#a78bfa'} style={{ cursor: 'grab' }} onPointerDown={event => { event.preventDefault(); dragging.current = { index, projection }; setDragProjection(projection); svg.current.setPointerCapture(event.pointerId); }} /><text x={p.x + 13} y={p.y - 9} fill="white" fontSize="11">{point.name}</text></g>; })}
       </svg>
-      <div className="procedure-mini-map-label">
-        {side === 'departure' ? 'DEP' : 'ARR'} · {runwayName || 'RWY'} · {procedureName || 'AUTO'} · {preview.hasPublishedProcedure ? 'published' : 'synthetic'}
-      </div>
+      <small>{side === 'departure' ? 'SID' : 'STAR'} · {runwayName || 'RWY'} · {procedureName || 'CUSTOM'}</small>
     </div>
-  );
+    <div className="procedure-editor-list">
+      <strong>{tx('Reference points')} · {points.length}/{MAX_PROCEDURE_POINTS}</strong>
+      <p>{tx('Drag INTCP along the runway extension (minimum 2 NM). Drag reference points freely.')}</p>
+      {(!geometry || !endpoint) && <p>{tx('Select a runway and a route with waypoint coordinates to edit.')}</p>}
+      {chain.map((point, index) => {
+        const pointIndex = side === 'departure' ? index - 1 : index;
+        const editable = points[pointIndex] === point;
+        const canInsert = index < chain.length - 1 && !(side === 'departure' && index === 0) && !(side === 'arrival' && index === chain.length - 2);
+        return <div key={index} className="procedure-editor-row"><span>{index + 1}. {point === origin ? code : point.name || point.label}</span>{editable && point.kind !== 'intercept' && <button aria-label={`${tx('Remove')} ${point.name}`} onClick={() => commit(points.filter((_, i) => i !== pointIndex))}>×</button>}{canInsert && <button disabled={points.length >= MAX_PROCEDURE_POINTS || !geometry} onClick={() => commit(insertProcedurePoint(points, index, origin, endpoint, side))}>{tx('Insert midpoint')}</button>}</div>;
+      })}
+      {!!initial.length && <button onClick={() => commit(initial)}>{tx('Reset points')}</button>}
+    </div>
+  </div>;
 };
-
+ProcedureMiniMap.propTypes = { airport: PropTypes.object, runwayName: PropTypes.string, procedureName: PropTypes.string, waypoints: PropTypes.array, side: PropTypes.string, value: PropTypes.object, onChange: PropTypes.func };
 export default ProcedureMiniMap;

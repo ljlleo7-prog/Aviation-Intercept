@@ -6,6 +6,7 @@ import './FlightComputerPanel.css';
 import FlightMapWorkspace from './FlightMapWorkspace';
 import NearbyLandingPorts from './NearbyLandingPorts';
 import { createDiversionPlan } from '../utils/diversionNavigation.js';
+import { getActiveWaypoints } from '../services/activeFlightPlan.js';
 
 const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightState, onActionRequest, aircraftModel, aircraftData }) => {
   const { t } = useLanguage();
@@ -128,8 +129,8 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
       // Handle both array and object formats
       if (Array.isArray(flightPlan)) {
         setWaypoints(flightPlan);
-      } else if (flightPlan.waypoints && Array.isArray(flightPlan.waypoints)) {
-        setWaypoints(flightPlan.waypoints);
+      } else {
+        setWaypoints(getActiveWaypoints(flightPlan));
       }
     }
   }, [flightPlan]);
@@ -357,7 +358,7 @@ const FlightComputerPanel = ({ onClose, flightPlan, onUpdateFlightPlan, flightSt
       </div>
       
       <div className="fc-content">
-        {activeTab === 'maps' && <><button className="direct-btn" onClick={() => setActiveTab('nearest')}>{t('ui.flight_computer.nearest.open')}</button><FlightMapWorkspace aircraftData={aircraftData} flightPlan={waypoints} flightState={flightState} /></>}
+        {activeTab === 'maps' && <><button className="direct-btn" onClick={() => setActiveTab('nearest')}>{t('ui.flight_computer.nearest.open')}</button><FlightMapWorkspace aircraftData={aircraftData} flightPlan={flightPlan} flightState={flightState} /></>}
         {activeTab === 'waypoints' && (
           <div className="waypoints-list">
             {waypoints.length === 0 ? (

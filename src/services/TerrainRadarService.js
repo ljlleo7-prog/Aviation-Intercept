@@ -1,9 +1,13 @@
-class TerrainRadarService {
+import { fetchElevationResponse } from './elevationRequests.js';
+
+export class TerrainRadarService {
     constructor() {
         this.GRID_SIZE = 0.01; // 0.01 degrees resolution (approx 1.1km or 0.6nm)
         this.cache = new Map(); // Key: "latIdx_lonIdx", Value: height (ft)
         this.fetchQueue = []; // Array of { key, latIdx, lonIdx, lat, lon, distSq }
         this.isFetching = false;
+        this.inFlightKeys = new Set();
+        this.fetcherStarted = false;
         this.lastPlayerPos = { lat: 0, lon: 0 };
         this.maxCacheSize = 5000; // Limit cache size
         this.fetchTimer = null;
@@ -71,7 +75,7 @@ class TerrainRadarService {
         for (let i = startIdx.latIdx; i <= endIdx.latIdx; i++) {
             for (let j = startIdx.lonIdx; j <= endIdx.lonIdx; j++) {
                 const key = this.getKey(i, j);
-                if (!this.cache.has(key)) {
+                if (!this.cache.has(key) && !this.inFlightKeys.has(key)) {
                     // Calculate center of tile
                     const tileLat = (i + 0.5) * this.GRID_SIZE;
                     const tileLon = (j + 0.5) * this.GRID_SIZE;
@@ -126,36 +130,40 @@ class TerrainRadarService {
         }
     }
 
-    // Async Fetcher Loop
-    async startFetcher() {
+    async fetchNextBatch() {
+        if (this.isFetching) return;
+        // Updates can replace the queue while a previous request is pending.
+        this.fetchQueue = this.fetchQueue.filter(item => !this.cache.has(item.key) && !this.inFlightKeys.has(item.key));
+        const batch = this.fetchQueue.splice(0, 20);
+        if (!batch.length) return;
+        this.isFetching = true;
+        batch.forEach(item => this.inFlightKeys.add(item.key));
+        try {
+            await this.fetchElevationData(batch);
+        } catch (error) {
+            console.warn('Terrain fetch failed:', error);
+        } finally {
+            batch.forEach(item => this.inFlightKeys.delete(item.key));
+            // Deferred or failed cells remain eligible for better data later.
+            this.fetchQueue.push(...batch.filter(item => !this.cache.has(item.key)));
+            this.isFetching = false;
+        }
+    }
+
+    startFetcher() {
+        if (this.fetcherStarted) return;
+        this.fetcherStarted = true;
         const processBatch = async () => {
-            if (this.fetchQueue.length > 0 && !this.isFetching) {
-                this.isFetching = true;
-                
-                // Process a batch of tiles
-                // Open-Elevation accepts multiple locations in one request
-                // Let's take up to 20 closest points
-                const batchSize = 20;
-                const batch = this.fetchQueue.splice(0, batchSize);
-
-                if (batch.length > 0) {
-                    try {
-                        await this.fetchElevationData(batch);
-                    } catch (error) {
-                        console.warn("Terrain fetch failed:", error);
-                        // Re-queue items at the back or discard? 
-                        // For now, discard to prevent loops, they will be re-added by update() if still relevant
-                    }
-                }
-                
-                this.isFetching = false;
-            }
-            
-            // Schedule next check
-            setTimeout(processBatch, 200); // 5 requests per second max (polite rate limit)
+            await this.fetchNextBatch();
+            if (this.fetcherStarted) this.fetchTimer = setTimeout(processBatch, 1000);
         };
-
         processBatch();
+    }
+
+    stopFetcher() {
+        this.fetcherStarted = false;
+        clearTimeout(this.fetchTimer);
+        this.fetchTimer = null;
     }
 
     // Call Terrain API with Fallback (Double-Entry)
@@ -184,12 +192,14 @@ class TerrainRadarService {
             // but usually for CORS it fails instantly. 
             // Let's try wrapping with proxy to be safe for production if direct is known to be flaky with CORS.
             // However, Open-Elevation often supports CORS. Let's try direct first for Primary.
-            const response = await fetch(urlPrimary);
-            if (!response.ok) throw new Error(`Primary API Error: ${response.status}`);
-            const data = await response.json();
-            if (data && data.results) {
-                this.processResults(batch, data.results);
-                success = true;
+            const response = await fetchElevationResponse(urlPrimary, { signal: AbortSignal.timeout(8000) });
+            if (response) {
+                if (!response.ok) throw new Error(`Primary API Error: ${response.status}`);
+                const data = await response.json();
+                if (data && data.results) {
+                    this.processResults(batch, data.results);
+                    success = true;
+                }
             }
         } catch (error) {
             console.warn("Terrain: Primary API failed, switching to Secondary...", error);
@@ -200,7 +210,8 @@ class TerrainRadarService {
             try {
                 // console.log("Terrain: Trying Secondary (OpenTopoData)...");
                 // OpenTopoData often has strict CORS. Use proxy.
-                const response = await fetch(corsProxy + encodeURIComponent(urlSecondary));
+                const response = await fetchElevationResponse(corsProxy + encodeURIComponent(urlSecondary), { signal: AbortSignal.timeout(8000) });
+                if (!response) return;
                 if (!response.ok) throw new Error(`Secondary API Error: ${response.status}`);
                 const data = await response.json();
                 if (data && data.results) {
@@ -225,9 +236,9 @@ class TerrainRadarService {
             if (index < batch.length) {
                 const item = batch[index];
                 const elevationMeters = result.elevation;
-                // Handle null elevation (ocean/error)
-                const validElev = (elevationMeters !== null && elevationMeters !== undefined) ? elevationMeters : 0;
-                const elevationFeet = validElev * 3.28084;
+                // Unknown samples stay pending; only an actual zero is sea level.
+                if (!Number.isFinite(elevationMeters)) return;
+                const elevationFeet = elevationMeters * 3.28084;
                 this.cache.set(item.key, elevationFeet);
             }
         });
@@ -235,3 +246,5 @@ class TerrainRadarService {
 }
 
 export const terrainRadarService = new TerrainRadarService();
+
+if (import.meta.hot) import.meta.hot.dispose(() => terrainRadarService.stopFetcher());

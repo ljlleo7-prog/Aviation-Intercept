@@ -90,10 +90,10 @@ export function attachFlightKeyboard({ target, getState, onAction, bindings = fl
   const up = event => {
     if (held.delete(bindings[event.code])) {
       event.preventDefault();
-      // Releasing pilot effort unloads the control immediately. Do not feed a
-      // decaying command into the manual-reversion resistance model.
+      // Only cable/manual reversion unloads immediately; powered controls
+      // retain the previous eased release.
       for (const [axis, goal] of Object.entries(targets())) {
-        if (goal === 0 && values[axis] !== 0) { values[axis] = 0; onAction(axis, 0); }
+        if (getState().immediateReleaseAxes?.includes(axis) && goal === 0 && values[axis] !== 0) { values[axis] = 0; onAction(axis, 0); }
       }
       apply();
     }
