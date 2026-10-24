@@ -1,0 +1,15 @@
+source_id,region_code,aip_cycle,source_file,source_kind,parsed,row_count,imported_at
+CN-2605-International Flights from Mainland of China Nr2605.csv,CN,2605,CHINA_AIP/International Flights from Mainland of China Nr2605.csv,route_csv,true,558,2026-05-31T06:39:14.958Z
+CN-2605-International Flights to Mainland of China Nr2605.csv,CN,2605,CHINA_AIP/International Flights to Mainland of China Nr2605.csv,route_csv,true,557,2026-05-31T06:39:14.958Z
+CN-2605-Overflying Flight Routes From Operation Center Nr2605.csv,CN,2605,CHINA_AIP/Overflying Flight Routes From Operation Center Nr2605.csv,route_csv,true,279,2026-05-31T06:39:14.958Z
+CN-2605-Regional Flight Routes Nr2605.csv,CN,2605,CHINA_AIP/Regional Flight Routes Nr2605.csv,route_csv,true,533,2026-05-31T06:39:14.958Z
+CN-2605-Directory of Waypoints in China.md,CN,2605,WAYPOINTS-CN.md/Directory of Waypoints in China.md,waypoint_markdown,true,557,2026-05-31T06:39:14.958Z
+US-2605-FAACIFP18.txt,US,2605,US_FAA_CIFP/FAACIFP18.txt,faa_cifp_fixed_width,true,2244,2026-05-31T06:39:14.958Z
+SG-2605-SG-ENR-3.1.pdf,SG,2605,SG-ENR-3.1.pdf,route_pdf,true,20,2026-05-31T06:39:14.958Z
+HK-2605-VH-ENR-3.1.pdf,HK,2605,VH-ENR-3.1.pdf,route_pdf,true,8,2026-05-31T06:39:14.958Z
+FR-2605-FR-ENR-3.2-fr-FR.pdf,FR,2605,FR-ENR-3.2-fr-FR.pdf,route_pdf,true,216,2026-05-31T06:39:14.958Z
+DE-2605-AIXM-reference,DE,2605,ED_Waypoints_2026-05-14_2026-06-11_revision.xml;ED_Navaids_2026-05-14_2026-05-14_snapshot.xml,aixm_reference_xml,true,5193,2026-05-31T06:39:14.958Z
+GB-2605-EG-ENR-3.2-en-GB.pdf,GB,2605,EG-ENR-3.2-en-GB.pdf,route_pdf,true,215,2026-05-31T06:39:14.958Z
+RU-2605-RU-ENR-3.2.pdf,RU,2605,RU-ENR-3.2.pdf,route_pdf,true,6,2026-05-31T06:39:14.958Z
+JP-2605-Directory of Waypoints in Japan.md,JP,2605,WAYPOINTS-JP.md/Directory of Waypoints in Japan.md,waypoint_markdown,true,2797,2026-05-31T06:39:14.958Z
+CA-2605-Directory of Waypoints in Canada.md,CA,2605,WAYPOINTS-CA.md/Directory of Waypoints in Canada.md,waypoint_markdown,true,4493,2026-05-31T06:39:14.958Z

@@ -1,0 +1,91 @@
+{
+  "generatedAt": "2026-10-24T09:54:41.787Z",
+  "sourceDir": "AIP_DATA/supabase_csv",
+  "targetDir": "public/AIP_DATA/supabase_csv",
+  "fileCount": 13,
+  "totals": {
+    "rawBytes": 28380025,
+    "gzipBytes": 7172489,
+    "brotliBytes": 5218616
+  },
+  "files": [
+    {
+      "file": "aip_airports.csv",
+      "rawBytes": 12640740,
+      "gzipBytes": 3802969,
+      "brotliBytes": 2826140
+    },
+    {
+      "file": "aip_frequencies.csv",
+      "rawBytes": 1296706,
+      "gzipBytes": 332113,
+      "brotliBytes": 236651
+    },
+    {
+      "file": "aip_navaids.csv",
+      "rawBytes": 1525245,
+      "gzipBytes": 536885,
+      "brotliBytes": 387608
+    },
+    {
+      "file": "aip_raw_sources.csv",
+      "rawBytes": 2007,
+      "gzipBytes": 633,
+      "brotliBytes": 532
+    },
+    {
+      "file": "aip_reference_points.csv",
+      "rawBytes": 3251624,
+      "gzipBytes": 501301,
+      "brotliBytes": 374740
+    },
+    {
+      "file": "aip_regions.csv",
+      "rawBytes": 2999,
+      "gzipBytes": 993,
+      "brotliBytes": 785
+    },
+    {
+      "file": "aip_route_airport_index.csv",
+      "rawBytes": 1030101,
+      "gzipBytes": 88822,
+      "brotliBytes": 47572
+    },
+    {
+      "file": "aip_route_catalog.csv",
+      "rawBytes": 542801,
+      "gzipBytes": 78367,
+      "brotliBytes": 55803
+    },
+    {
+      "file": "aip_route_edge_index.csv",
+      "rawBytes": 1085976,
+      "gzipBytes": 184934,
+      "brotliBytes": 120868
+    },
+    {
+      "file": "aip_route_legs.csv",
+      "rawBytes": 885219,
+      "gzipBytes": 132717,
+      "brotliBytes": 80173
+    },
+    {
+      "file": "aip_route_lookup_index.csv",
+      "rawBytes": 690836,
+      "gzipBytes": 62667,
+      "brotliBytes": 37862
+    },
+    {
+      "file": "aip_route_tokens.csv",
+      "rawBytes": 1476672,
+      "gzipBytes": 179105,
+      "brotliBytes": 100098
+    },
+    {
+      "file": "aip_runways.csv",
+      "rawBytes": 3949099,
+      "gzipBytes": 1270983,
+      "brotliBytes": 949784
+    }
+  ]
+}
