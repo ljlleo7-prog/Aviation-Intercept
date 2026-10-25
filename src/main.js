@@ -11,8 +11,8 @@ applyDisplayPreferences(readDisplayPreferences())
 
 initializeScenery().then(() => ReactDOM.createRoot(document.getElementById('root')).render(
   React.createElement(React.StrictMode, null,
-    React.createElement(FpsCounter),
     React.createElement(AuthProvider, null,
+      React.createElement(FpsCounter),
       React.createElement(App)
     )
   )

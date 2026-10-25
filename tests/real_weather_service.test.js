@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { realWeatherService } from '../src/services/RealWeatherService.js';
+import { RealWeatherService } from '../src/services/RealWeatherService.js';
+
+const realWeatherService = new RealWeatherService({ requestWeather: (...args) => fetch(...args) });
 
 test('real weather normalizes authoritative API payload into sane aviation values', async () => {
   const originalFetch = global.fetch;

@@ -138,10 +138,13 @@ class EnginePhysicsService {
                 // User Request: Throttle controls N1 directly (Linear).
                 // Idle N1 = 20%, Max N1 = 102%.
                 const idleN1 = this.config.idleN1;
-                const normalMaxN1 = this.config.operationalMaxN1;
+                // Full forward lever commands the rated takeoff limit. The lower operational
+                // limit applies to partial-power operation, not to TOGA authorization.
+                const takeoffBlend = Math.max(0, Math.min(1, (throttle - 0.85) / 0.15));
+                const normalMaxN1 = this.config.operationalMaxN1 + takeoffBlend * (this.config.maxN1 - this.config.operationalMaxN1);
                 const emergencyMaxN1 = this.config.emergencyMaxN1;
                 const emergencyRequested = this.state.emergencyBoostAllowed && throttle >= 0.93;
-                const ambientC = Number.isFinite(ambientTemp) ? ambientTemp : 15;
+                const ambientC = Number.isFinite(ambientTemp) ? (ambientTemp > 150 ? ambientTemp - 273.15 : ambientTemp) : 15;
                 const densityPenalty = Math.max(-0.03, Math.min(0.03, (airDensityRatio - 1) * 0.08));
                 const tempPenalty = Math.max(-0.03, Math.min(0.03, -(ambientC - 15) * 0.0015));
                 const environmentalAdjustment = densityPenalty + tempPenalty;

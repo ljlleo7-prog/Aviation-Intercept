@@ -1,4 +1,6 @@
 import { PROVIDER_STATUS } from './routeTypes.js';
+import { isOfflineMode } from '../../utils/appNetworkMode.js';
+import { notifyApiUsage } from '../environmentApiClient.js';
 import { buildProviderNegativeCacheKey, getCachedProviderNegative, setCachedProviderNegative } from './routeCacheService.js';
 
 const getSupabaseClient = async () => {
@@ -11,6 +13,8 @@ const getSupabaseClient = async () => {
 };
 
 export const callGuardedRouteProvider = async ({ provider, payload = {}, mockResponse = null } = {}) => {
+  const offlineResponse = { status: PROVIDER_STATUS.UNAVAILABLE, message: 'External route providers are disabled in offline mode.', billing: { chargedTokens: 0, creditsConsumed: 0 } };
+  if (isOfflineMode()) return offlineResponse;
   if (mockResponse) return mockResponse;
 
   const supabase = await getSupabaseClient();
@@ -22,6 +26,7 @@ export const callGuardedRouteProvider = async ({ provider, payload = {}, mockRes
   }
 
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (isOfflineMode()) return offlineResponse;
   if (sessionError || !sessionData?.session?.user) {
     return {
       status: PROVIDER_STATUS.UNAUTHENTICATED,
@@ -42,6 +47,7 @@ export const callGuardedRouteProvider = async ({ provider, payload = {}, mockRes
         payload
       }
     });
+    notifyApiUsage();
 
     if (error) {
       const failed = {

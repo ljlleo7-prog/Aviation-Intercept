@@ -102,7 +102,8 @@ test('deferred terrain remains pending, retries successfully, and fetcher starts
 
 test('ground elevation defers during shared provider cooldown without caching sea level', async () => {
   const { TerrainService } = await import('../src/services/TerrainService.js');
-  const service = new TerrainService();
+  const requestElevation = createElevationRequester();
+  const service = new TerrainService({ requestElevation });
   const originalFetch = globalThis.fetch;
   let calls = 0;
   globalThis.fetch = async () => {
@@ -112,7 +113,7 @@ test('ground elevation defers during shared provider cooldown without caching se
   try {
     assert.equal(await service.getElevation(31.64, 121.65), null);
     assert.equal(service.cache.size, 0);
-    const secondConsumer = new TerrainService();
+    const secondConsumer = new TerrainService({ requestElevation });
     assert.equal(await secondConsumer.getElevation(31.65, 121.66), null);
     assert.equal(calls, 1);
     assert.equal(secondConsumer.cache.size, 0);

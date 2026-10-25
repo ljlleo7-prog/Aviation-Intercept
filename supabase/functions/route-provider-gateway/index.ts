@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const RATE_LIMIT_PER_MINUTE = Number(Deno.env.get('ROUTE_API_RATE_LIMIT_PER_MINUTE') || '10');
-const ROUTE_TOKEN_COST = 1;
+const ROUTE_CREDIT_COST = 1;
 
 type GatewayPayload = Record<string, unknown>;
 
@@ -121,7 +121,7 @@ async function reserveRouteApiCall(
   const { data, error } = await supabase.rpc('reserve_route_api_call', {
     p_user_id: userId,
     p_limit_per_minute: RATE_LIMIT_PER_MINUTE,
-    p_token_cost: ROUTE_TOKEN_COST,
+    p_token_cost: ROUTE_CREDIT_COST,
     p_provider: provider,
     p_origin: payload.origin || null,
     p_destination: payload.destination || null
@@ -553,17 +553,16 @@ serve(async (req) => {
     return json({ status: 'rate_limited', message: 'Route API rate limit exceeded. Falling back to local routing.' });
   }
 
-  if (reservation.status === 'insufficient_tokens') {
-    await adminClient.from('route_api_call_logs').insert({ user_id: user.id, provider, origin: payload.origin, destination: payload.destination, status: 'insufficient_tokens' });
-    return json({ status: 'insufficient_tokens', message: 'Not enough tokens for external route API call.' });
+  if (reservation.status !== 'ok') {
+    return json({ status: reservation.status, billing: { chargedTokens: 0, creditsConsumed: 0 } });
   }
 
   const providerResult = await fetchProvider(provider, payload, getProviderKey(provider));
   if (providerResult.status !== 'ok') {
-    await adminClient.from('route_api_call_logs').insert({ user_id: user.id, provider, origin: payload.origin, destination: payload.destination, status: providerResult.status, charged_tokens: reservation.charged_tokens || 0 });
-    return json({ ...providerResult, billing: { chargedTokens: reservation.charged_tokens || 0 } });
+    await adminClient.from('route_api_call_logs').insert({ user_id: user.id, provider, origin: payload.origin, destination: payload.destination, status: providerResult.status, charged_tokens: 0 });
+    return json({ ...providerResult, billing: { chargedTokens: 0, creditsConsumed: 1, settlement: 'deferred' } });
   }
 
-  await adminClient.from('route_api_call_logs').insert({ user_id: user.id, provider, origin: payload.origin, destination: payload.destination, status: 'ok', charged_tokens: reservation.charged_tokens || ROUTE_TOKEN_COST });
-  return json({ ...providerResult, billing: { chargedTokens: reservation.charged_tokens || ROUTE_TOKEN_COST } });
+  await adminClient.from('route_api_call_logs').insert({ user_id: user.id, provider, origin: payload.origin, destination: payload.destination, status: 'ok', charged_tokens: 0 });
+  return json({ ...providerResult, billing: { chargedTokens: 0, creditsConsumed: 1, settlement: 'deferred' } });
 });

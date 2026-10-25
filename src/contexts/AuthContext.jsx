@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/aviationIntercept/SupabaseClient.js';
+import { setGuestApiAccess } from '../utils/apiAccessMode.js';
 
 const AuthContext = createContext({
   user: null,
@@ -21,6 +22,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(Boolean(supabase));
   const authAvailable = Boolean(supabase?.auth);
+  useEffect(() => { setGuestApiAccess(!user); }, [user]);
 
   useEffect(() => {
     if (!authAvailable) {

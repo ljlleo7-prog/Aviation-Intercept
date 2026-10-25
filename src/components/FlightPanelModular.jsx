@@ -18,14 +18,13 @@ import SystemStatusPanel from './SystemStatusPanel';
 import CircuitBreakerPanel from './CircuitBreakerPanel';
 import SensoryFeedback from './SensoryFeedback';
 import CockpitSmoke from './CockpitSmoke.jsx';
-import SettingsPanel from './SettingsPanel';
 import CenterControlPedestal from './CenterControlPedestal.jsx';
 import AircraftMainPanelReplica from './AircraftMainPanelReplica.jsx';
 import { useLanguage } from '../contexts/LanguageContext';
 import './FlightPanel.css';
 import { cockpitVisualState, daylightFactor, parseZuluTime } from '../utils/cockpitVisualState.js';
 
-const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherData, onActionRequest, aircraftModel, aircraftData, selectedArrival, flightPlan, radioMessages, onRadioFreqChange, npcs, frequencyContext, currentRegion, timeZulu, timeScale, setTimeScale, onUpdateFlightPlan, availableRunways, startupStatus, playerSettings, playerSettingsError, autoSaveStatus, onUpdatePlayerSettings, visualQuality, onUpdateVisualQuality, ilsRunwayOptions = [] }) => {
+const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherData, onActionRequest, aircraftModel, aircraftData, selectedArrival, flightPlan, radioMessages, onRadioFreqChange, npcs, frequencyContext, currentRegion, timeZulu, timeScale, setTimeScale, onUpdateFlightPlan, availableRunways, startupStatus, onOpenSettings, ilsRunwayOptions = [] }) => {
   const { t } = useLanguage();
   const isAirbus = ((aircraftModel || '').toLowerCase().includes('a3') || (aircraftModel || '').toLowerCase().includes('airbus'));
   const efisFontClass = isAirbus ? 'efis-font-airbus' : 'efis-font-boeing';
@@ -257,6 +256,7 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
   };
 
   const handleSidebarToggle = (panelId) => {
+    if (panelId === 'settings') { onOpenSettings?.(); return; }
     if (panelId === 'inspect') {
       if (onActionRequest) {
         onActionRequest('toggle-debug', { target: 'physics' });
@@ -499,16 +499,6 @@ const FlightPanelModular = ({ flightData, physicsState, physicsService, weatherD
         aircraftModel,
         onClose: () => setActiveSidebarPanel(null),
         onLoadFlight: handleLoadFlight
-    }),
-
-    activeSidebarPanel === 'settings' && React.createElement(SettingsPanel, {
-        settings: playerSettings,
-        settingsError: playerSettingsError,
-        autoSaveStatus,
-        onUpdateSettings: onUpdatePlayerSettings,
-        visualQuality,
-        onUpdateVisualQuality,
-        onClose: () => setActiveSidebarPanel(null)
     }),
 
     // System Status Panel Overlay

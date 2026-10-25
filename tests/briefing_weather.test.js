@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadBriefingWeather } from '../src/services/briefingWeather.js';
 import { formatBriefingWeather } from '../src/utils/briefingWeather.js';
-import { realWeatherService } from '../src/services/RealWeatherService.js';
+import { RealWeatherService } from '../src/services/RealWeatherService.js';
 
 const departure = { latitude: 0, longitude: 0 };
 const generated = { windSpeed: 12, visibility: 8000, cloudCover: 60 };
@@ -74,6 +74,7 @@ test('formatting preserves zero readings and handles missing or legacy turbulenc
 });
 
 test('real weather forwards the timeout signal to its request', async () => {
+  const realWeatherService = new RealWeatherService({ requestWeather: (...args) => fetch(...args) });
   const originalFetch = globalThis.fetch;
   const controller = new AbortController();
   realWeatherService.cache = {};

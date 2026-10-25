@@ -1,4 +1,18 @@
 .display-settings { display: grid; gap: 16px; }
+.settings-page { min-height: 100dvh; width: 100%; box-sizing: border-box; background: radial-gradient(ellipse at 50% 0%, #193044, #08111d 70%); color: #f3f4f6; font-family: system-ui, sans-serif; }
+.settings-page a { color: #80d9f5; }
+.settings-page-content { width: min(1180px, 100%); box-sizing: border-box; margin: 0 auto; padding: 32px clamp(16px, 4vw, 48px) 64px; }
+.settings-page-header { margin-bottom: 28px; }
+.settings-page-header h1 { margin: 24px 0 12px; font-size: clamp(28px, 4vw, 40px); }
+.settings-page-header p { color: #bccbd7; }
+.settings-back { min-height: 44px; padding: 8px 14px; border: 1px solid #697d8e; border-radius: 6px; color: #f3f4f6; background: #101e2b; font: inherit; cursor: pointer; }
+.settings-page .display-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.settings-page .api-usage-settings { grid-column: 1 / -1; }
+.settings-page .radar-settings { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; }
+.settings-page .radar-settings h4, .settings-page .radar-settings p { grid-column: 1 / -1; margin: 0; }
+.settings-page .radar-settings label { margin: 0; }
+.settings-page-content > .settings-section { margin-top: 16px; }
+.settings-section .settings-checkbox { display: flex; align-items: center; gap: 10px; }
 .settings-section { padding: 14px; background: #101e2b; border: 1px solid #536879; border-radius: 10px; }
 .settings-section h4 { margin: 0 0 14px; color: #ead1af; font-size: 15px; }
 .settings-section label { display: grid; gap: 7px; margin-top: 12px; font-size: 14px; font-weight: 600; }
@@ -9,11 +23,17 @@
 .homepage-content > .settings-section { width: min(100%, 650px); box-sizing: border-box; margin-top: 24px; text-align: left; }
 .settings-section button { min-height: 36px; padding: 6px 12px; background: #203747; border: 1px solid #91acbd; border-radius: 5px; color: #fff; cursor: pointer; }
 .settings-section button:disabled { opacity: .5; cursor: default; }
+.api-usage-totals { display: grid; grid-template-columns: 1fr auto; gap: 8px; font-size: 13px; }
+.api-usage-totals dd { margin: 0; text-align: right; }
+.api-usage-table { overflow-x: auto; }
+.api-usage-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.api-usage-table caption { text-align: left; margin: 12px 0 8px; font-weight: 600; }
+.api-usage-table th, .api-usage-table td { padding: 8px 4px; text-align: left; border-bottom: 1px solid #536879; }
+.api-usage-recent { padding-left: 20px; font-size: 12px; line-height: 1.6; }
+.settings-section .api-credit-notice { padding: 10px; border: 1px solid #b6a16c; border-radius: 6px; color: #f4dda5; }
 .settings-section input[type="file"] { max-width: 100%; min-width: 0; font: inherit; font-size: 12px; }
 .settings-section li { overflow-wrap: anywhere; margin-bottom: 14px; }
-.settings-section :focus-visible, .menu-settings-panel :focus-visible, .flight-settings-panel :focus-visible { outline: 3px solid #80d9f5; outline-offset: 3px; }
-.menu-settings-panel, .flight-settings-panel { max-height: calc(100dvh - 96px); overflow-y: auto; box-sizing: border-box; }
-.menu-settings-panel > .display-settings { margin-bottom: 20px; }
+.settings-section :focus-visible, .settings-page :focus-visible { outline: 3px solid #80d9f5; outline-offset: 3px; }
 html[data-contrast="high"] .settings-section { background: #000; border-color: #fff; }
 html[data-contrast="high"] .settings-section :is(h4, p, label, summary) { color: #fff; }
 html[data-contrast="high"] .settings-section select { background: #000; border-color: #fff; }
@@ -21,6 +41,9 @@ html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-
 @media (prefers-reduced-motion: reduce) {
   html[data-motion="system"] *, html[data-motion="system"] *::before, html[data-motion="system"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
-@media (max-width: 600px) {
-  .flight-settings-panel { left: 12px !important; width: calc(100vw - 24px) !important; }
+@media (max-width: 780px) {
+  .settings-page .display-settings { grid-template-columns: minmax(0, 1fr); }
+  .settings-page .radar-settings { grid-template-columns: minmax(0, 1fr); }
+  .api-usage-totals { grid-template-columns: minmax(0, 1fr); }
+  .api-usage-totals dd { text-align: left; margin-bottom: 8px; }
 }

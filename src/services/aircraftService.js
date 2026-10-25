@@ -1,3 +1,4 @@
+import { planMissionFuel } from './flightPerformancePlanning.js';
 // Aircraft Service for Ultimate Crash Simulation
 // Provides aircraft-specific performance data for fuel calculations
 
@@ -118,87 +119,13 @@ class AircraftService {
   }
 
   // Calculate fuel requirements for a flight
-  async calculateFuelRequirements(aircraftModel, distance, payload, fuelReserve = 0.05) {
+  async calculateFuelRequirements(aircraftModel, distance, payload, fuelReserve = 0.05, options = {}) {
     const aircraft = await this.getAircraftByModel(aircraftModel);
     if (!aircraft) {
       throw new Error(`Aircraft model '${aircraftModel}' not found`);
     }
 
-    // Ensure inputs are numbers to prevent string concatenation
-    const safeDistance = Number(distance) || 0;
-    const safePayload = Number(payload) || 0;
-    const safeReserve = Number(fuelReserve) || 0;
-
-    // Calculate trip fuel using enhanced algorithm
-    // 1. Determine baseline weights (assume typicalBurn is for ~50% load)
-    const emptyWeight = Number(aircraft.emptyWeight) || 40000;
-    const maxPayload = Number(aircraft.maxPayload) || 20000;
-    const cruiseSpeed = Number(aircraft.cruiseSpeed) || 450;
-    const typicalFuelBurn = Number(aircraft.typicalFuelBurn) || 5.0;
-    
-    // Safety check for critical values
-    if (typicalFuelBurn <= 0 || cruiseSpeed <= 0) {
-        console.warn(`Invalid performance data for ${aircraftModel}: Burn=${typicalFuelBurn}, Speed=${cruiseSpeed}`);
-        // Fallback to reasonable defaults to avoid NaN/Infinity
-    }
-
-    const typicalWeight = emptyWeight + (maxPayload * 0.5) + (typicalFuelBurn * cruiseSpeed * 1.5); 
-
-    // 2. Estimate flight specific weight
-    const estFuelMass = typicalFuelBurn * safeDistance;
-    const flightAvgWeight = emptyWeight + safePayload + (estFuelMass * 0.5);
-
-    // 3. Weight Correction Factor (Fuel flow ~ Weight)
-    // Fuel burn scales roughly linearly with weight for small variations
-    let weightFactor = flightAvgWeight / typicalWeight;
-    
-    // Sanity check for weight factor
-    if (isNaN(weightFactor) || weightFactor <= 0.1 || weightFactor > 10) {
-        console.warn(`Abnormal weight factor calculated: ${weightFactor} (AvgWt: ${flightAvgWeight}, TypWt: ${typicalWeight})`);
-        weightFactor = 1.0; // Fallback
-    }
-
-    // 4. Flight Time Calculation with Cycle Overhead
-    // Overhead: Taxi (15m) + Climb/Descent inefficiency (20m equivalent cruise time penalty)
-    // Real-world ZSPD-ZBAA (600nm) takes ~1h50m block time. 600/450 = 1h20m air time.
-    // So we add ~30 mins overhead to flight time estimation
-    const cruiseTimeHours = safeDistance / cruiseSpeed;
-    const overheadHours = 0.5; // 30 minutes fixed overhead for taxi/climb/descent
-    const totalFlightHours = cruiseTimeHours + overheadHours;
-
-    // 5. Final Calculation
-    // Base burn rate (kg/hr) adjusted for weight
-    const baseBurnRateKgHr = (typicalFuelBurn * cruiseSpeed);
-    const adjustedBurnRateKgHr = baseBurnRateKgHr * weightFactor;
-    
-    // Trip Fuel = Rate * Time
-    const tripFuel = adjustedBurnRateKgHr * totalFlightHours;
-    
-    // Calculate reserve fuel (Time-based: default 60 mins or user specified)
-    // fuelReserve param is now treated as HOURS if > 1, or % if < 1 (legacy support)
-    let reserveHours = 1.0;
-    if (safeReserve > 1) reserveHours = safeReserve;
-    else if (safeReserve > 0 && safeReserve <= 1) reserveHours = 1.0; // Default to 1 hr if small decimal passed (legacy 0.05 case handled safely)
-    
-    // If legacy 0.05 was passed, we might want to convert, but let's just stick to 1 hour standard for now unless specified
-    const reserveFuel = adjustedBurnRateKgHr * reserveHours;
-    
-    // Calculate total fuel requirement
-    const totalFuel = tripFuel + reserveFuel;
-    
-    // Check if fuel exceeds maximum capacity
-    if (totalFuel > aircraft.maxFuelCapacity) {
-      console.error(`Fuel calc error: Distance=${safeDistance}, CruiseSpeed=${cruiseSpeed}, TypicalBurn=${typicalFuelBurn}, TotalFlightHours=${totalFlightHours}, WeightFactor=${weightFactor}, TripFuel=${tripFuel}`);
-      throw new Error(`Fuel requirement (${totalFuel.toFixed(0)} kg) exceeds maximum capacity (${aircraft.maxFuelCapacity} kg)`);
-    }
-
-    return {
-      tripFuel: Math.round(tripFuel),
-      reserveFuel: Math.round(reserveFuel),
-      totalFuel: Math.round(totalFuel),
-      maxCapacity: aircraft.maxFuelCapacity,
-      fuelPercentage: Math.round((totalFuel / aircraft.maxFuelCapacity) * 100)
-    };
+    return planMissionFuel(aircraft, distance, payload, Number(fuelReserve), options);
   }
 
   // Calculate flight performance metrics
@@ -315,7 +242,7 @@ class AircraftService {
       return { isValid: false, errors: ['Aircraft not found'] };
     }
 
-    const totalWeight = payload + fuel;
+    const totalWeight = aircraft.emptyWeight + Number(payload) + Number(fuel);
     const maxWeight = aircraft.maxTakeoffWeight;
     
     return {

@@ -46,13 +46,3 @@
   background: var(--menu-surface);
   border-inline: 1px solid var(--menu-border);
 }
-
-.menu-settings-overlay {
-  background: #080f19b3;
-  backdrop-filter: blur(12px);
-}
-
-.menu-settings-panel {
-  background: linear-gradient(145deg, #1b2e3b, #0c1825);
-  border: 1px solid #a6bfd040;
-}

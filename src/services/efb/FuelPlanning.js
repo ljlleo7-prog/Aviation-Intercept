@@ -16,7 +16,7 @@ export const calculateFuelPlan = ({ flightState, routeProgress, preflightConfig,
   const reserveFuel = Number(preflightConfig?.flightPlan?.fuel?.reserveFuel) || Number(preflightConfig?.fuelReserve) || 0;
   const tripFuel = Number(preflightConfig?.flightPlan?.fuel?.tripFuel) || null;
   const dryOperatingMass = Number(aircraftData?.emptyWeight || aircraftData?.mass) || 0;
-  const airborneWeight = dryOperatingMass + fuelRemaining;
+  const airborneWeight = Number(flightState?.mass) || dryOperatingMass + Math.max(0, Number(preflightConfig?.payload) || 0) + fuelRemaining;
 
   return {
     fuelRemaining,

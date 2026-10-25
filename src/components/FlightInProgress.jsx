@@ -1,3 +1,4 @@
+import SettingsPage from './SettingsPage.jsx';
 import React, { useRef, useState, useEffect, useMemo, startTransition } from 'react';
 import { mergeFlightPlanWithRoute } from '../utils/routeDetails.js';
 import { activateFlightRoute } from '../services/activeFlightPlan.js';
@@ -87,6 +88,10 @@ const FlightInProgress = ({
   onRestoreFlight
 }) => {
 
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpenRef = useRef(false);
+  settingsOpenRef.current = settingsOpen;
 
   const averagePassengerWeight = 90;
   const averageCrewWeight = 90;
@@ -357,7 +362,7 @@ const FlightInProgress = ({
   } = useAircraftPhysics(aircraftConfig, false, physicsModel);
 
   useFlightKeyboard({
-    aircraftModel, physicsService, enabled: isInitialized && !isCrashed,
+    aircraftModel, physicsService, enabled: isInitialized && !isCrashed && !settingsOpen,
     controls: {
       pitch: setPitch, roll: setRoll, yaw: setYaw, toeBrakes: setToeBrakes,
       gear: setGear, flaps: setFlaps, throttle: setThrottle, airBrakes: setAirBrakes,
@@ -1076,6 +1081,7 @@ const FlightInProgress = ({
 
     if (useRealWeather) {
        const fetchRealWeather = async () => {
+         if (settingsOpenRef.current || document.hidden || offlineMode) return;
          const svc = physicsServiceRef.current;
          const lat = svc?.state?.geo?.lat || initialDeparture?.latitude || 37.6188;
          const lon = svc?.state?.geo?.lon || initialDeparture?.longitude || -122.3750;
@@ -1113,8 +1119,14 @@ const FlightInProgress = ({
 
   // Terrain update effect
   useEffect(() => {
+    let controller = new AbortController();
+    const visibility = () => {
+      if (document.hidden) controller.abort();
+      else controller = new AbortController();
+    };
+    document.addEventListener('visibilitychange', visibility);
     const fetchTerrain = async () => {
-       if (!physicsService || !physicsService.state || !physicsService.state.geo) return;
+       if (settingsOpenRef.current || document.hidden || !physicsService || !physicsService.state || !physicsService.state.geo) return;
 
        const { lat, lon } = physicsService.state.geo;
 
@@ -1130,8 +1142,9 @@ const FlightInProgress = ({
                return;
            }
 
-           const ele = await terrainService.getElevation(lat, lon);
-           if (ele !== null && typeof ele === 'number') {
+           const requestController = controller;
+           const ele = await terrainService.getElevation(lat, lon, { signal: requestController.signal });
+           if (!requestController.signal.aborted && ele !== null && typeof ele === 'number') {
                physicsService.terrainElevation = ele;
            }
        } catch (e) {
@@ -1141,7 +1154,11 @@ const FlightInProgress = ({
     
     // Loop every 1 second
     const interval = setInterval(fetchTerrain, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+      document.removeEventListener('visibilitychange', visibility);
+    };
   }, [physicsService, offlineMode]);
 
   // Update scene manager with selected flight parameters
@@ -1236,6 +1253,11 @@ const FlightInProgress = ({
     const loop = now => {
       const frameDt = Math.min((now - lastTime) / 1000, MAX_FRAME_DELTA);
       lastTime = now;
+      if (settingsOpenRef.current) {
+        accumulator = 0;
+        animationId = requestAnimationFrame(loop);
+        return;
+      }
       accumulator = Math.min(accumulator + frameDt, MAX_ACCUMULATED_TIME);
 
       let physicsSnapshot = physicsStateRef.current;
@@ -1668,15 +1690,24 @@ const FlightInProgress = ({
     );
   }
 
-  return (
-    <div style={{
+  return <>
+    {settingsOpen && <SettingsPage
+      returnToFlight showCloudSettings
+      settings={playerSettings} settingsError={offlineMode ? null : playerSettingsError}
+      autoSaveStatus={offlineMode ? null : autoSaveStatus}
+      onUpdateSettings={offlineMode ? undefined : handlePlayerSettingsChange}
+      visualQuality={visualQuality}
+      onUpdateVisualQuality={value => setVisualQuality(writeVisualQuality(value))}
+      onBack={() => setSettingsOpen(false)}
+    />}
+    <div hidden={settingsOpen} inert={settingsOpen ? '' : undefined} style={{
       position: 'relative',
       width: '100vw',
       minHeight: '100vh',
       background: '#0a0a0a',
       overflowX: 'hidden',
       overflowY: 'auto',
-      display: 'flex',
+      display: settingsOpen ? 'none' : 'flex',
       flexDirection: 'column'
     }}>
       <div
@@ -1877,6 +1908,7 @@ const FlightInProgress = ({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', zIndex: 10 }}>
           <div style={{ padding: '4px 10px', background: '#111b25', color: '#b8c7d4', fontSize: '11px' }}>{flightKeyboardHelp}</div>
           <FlightPanelModular
+            onOpenSettings={() => setSettingsOpen(true)}
             timeZulu={timeZulu}
             flightData={{
               ...flightData,
@@ -2143,7 +2175,7 @@ const FlightInProgress = ({
         />
       )}
     </div>
-  );
+  </>;
 };
 
 export default FlightInProgress;

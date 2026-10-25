@@ -1,5 +1,6 @@
 import { parseCsv as parseCsvText } from '../../utils/csv.js';
 import { loadInstalledAipPack } from '../aipPackStorage.js';
+import { isOfflineMode } from '../../utils/appNetworkMode.js';
 
 const defaultCsvDir = '/AIP_DATA/supabase_csv';
 
@@ -15,16 +16,23 @@ let cachedSource = null;
 
 const joinUrlPath = (base, file) => `${String(base || '').replace(/\/$/, '')}/${file}`;
 
-const readCsvText = async (csvDir, fileName, readFile, progressCallback) => {
+// These are app-owned static assets, not cloud AIP/provider API calls.
+const isBundledAipAsset = filePath => {
+  const origin = globalThis.window?.location?.origin || 'http://app.local';
+  try {
+    const url = new URL(filePath, origin);
+    return url.origin === origin && Object.values(FILES).some(file => url.pathname.endsWith(`/AIP_DATA/supabase_csv/${file}`));
+  } catch { return false; }
+};
+
+const readCsvText = async (csvDir, fileName, readFile, progressCallback, allowNetwork) => {
   const filePath = joinUrlPath(csvDir, fileName);
   if (readFile) return readFile(filePath);
 
-  if (typeof fetch !== 'function') {
-    throw new Error('Local AIP CSV loading requires fetch or a readFile option.');
-  }
-
   const installed = await loadInstalledAipPack();
   if (installed?.files[fileName]) return installed.files[fileName];
+  if ((!allowNetwork || isOfflineMode()) && !isBundledAipAsset(filePath)) throw new Error('External AIP data is unavailable offline.');
+  if (typeof fetch !== 'function') throw new Error('Local AIP CSV loading requires fetch or a readFile option.');
   const response = await fetch(filePath);
   if (!response.ok) throw new Error(`Failed to load ${filePath}: ${response.status}`);
 
@@ -49,7 +57,7 @@ const readCsvText = async (csvDir, fileName, readFile, progressCallback) => {
   return chunks.map(chunk => decoder.decode(chunk, { stream: true })).join('') + decoder.decode();
 };
 
-const parseCsv = async (csvDir, fileName, readFile, progressCallback) => parseCsvText(await readCsvText(csvDir, fileName, readFile, progressCallback));
+const parseCsv = async (csvDir, fileName, readFile, progressCallback, allowNetwork) => parseCsvText(await readCsvText(csvDir, fileName, readFile, progressCallback, allowNetwork));
 
 const key = (...parts) => parts.map((part) => String(part || '').toUpperCase()).join('|');
 
@@ -70,16 +78,19 @@ const addToListMap = (map, mapKey, value) => {
   map.get(mapKey).push(value);
 };
 
-const loadLocalAipCsvStore = async ({ csvDir = defaultCsvDir, forceReload = false, readFile = null, progressCallback = null } = {}) => {
+const loadLocalAipCsvStore = async ({ csvDir = defaultCsvDir, forceReload = false, readFile = null, progressCallback = null, allowNetwork = true } = {}) => {
   const installed = readFile ? null : await loadInstalledAipPack();
+  if (!installed && !readFile && (!allowNetwork || isOfflineMode()) && !isBundledAipAsset(joinUrlPath(csvDir, FILES.lookup))) {
+    throw new Error('External AIP data is unavailable offline.');
+  }
   const source = installed || readFile || csvDir;
   if (cachedStore && cachedSource === source && cachedStore.csvDir === csvDir && !forceReload) return cachedStore;
 
   const [lookupRows, legRows, pointRows, edgeRows] = await Promise.all([
-    parseCsv(csvDir, FILES.lookup, readFile, progressCallback),
-    parseCsv(csvDir, FILES.legs, readFile, progressCallback),
-    parseCsv(csvDir, FILES.points, readFile, progressCallback),
-    parseCsv(csvDir, FILES.edges, readFile, progressCallback)
+    parseCsv(csvDir, FILES.lookup, readFile, progressCallback, allowNetwork),
+    parseCsv(csvDir, FILES.legs, readFile, progressCallback, allowNetwork),
+    parseCsv(csvDir, FILES.points, readFile, progressCallback, allowNetwork),
+    parseCsv(csvDir, FILES.edges, readFile, progressCallback, allowNetwork)
   ]);
 
   const lookupByPair = new Map();

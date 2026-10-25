@@ -3,7 +3,7 @@ import { aipLoadingProgress } from './aipLoadingProgress.js';
 
 let preloadPromise = null;
 
-export const preloadLocalAipData = () => {
+export const preloadLocalAipData = async () => {
   if (preloadPromise) return preloadPromise;
 
   preloadPromise = loadLocalAipCsvStore({
@@ -18,6 +18,7 @@ export const preloadLocalAipData = () => {
     aipLoadingProgress.complete();
     return true;
   }).catch((error) => {
+    preloadPromise = null;
     console.warn('Failed to preload local AIP data:', error);
     aipLoadingProgress.complete();
     return false;

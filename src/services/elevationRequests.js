@@ -1,6 +1,8 @@
+import { fetchMeteredEnvironmentResponse } from './environmentApiClient.js';
+
 // Both terrain consumers share the provider budget. A missing response means
 // deferred work, never sea-level data; callers may retry after the cooldown.
-export function createElevationRequester({ fetchImpl = (...args) => fetch(...args), now = Date.now } = {}) {
+export function createElevationRequester({ fetchImpl = (...args) => fetch(...args), now = () => Date.now() } = {}) {
   const providers = new Map();
   return async (url, options) => {
     const provider = new URL(url).origin;
@@ -24,7 +26,10 @@ export function createElevationRequester({ fetchImpl = (...args) => fetch(...arg
       }
       return response;
     } catch (error) {
-      state.nextAt = now() + backoff();
+      // Leaving a view is cancellation, not a provider failure. Timeouts still back off.
+      if (!options?.signal?.aborted || options.signal.reason?.name === 'TimeoutError') {
+        state.nextAt = now() + backoff();
+      }
       throw error;
     } finally {
       state.busy = false;
@@ -32,4 +37,4 @@ export function createElevationRequester({ fetchImpl = (...args) => fetch(...arg
   };
 }
 
-export const fetchElevationResponse = createElevationRequester();
+export const fetchElevationResponse = createElevationRequester({ fetchImpl: fetchMeteredEnvironmentResponse });

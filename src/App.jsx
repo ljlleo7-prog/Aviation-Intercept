@@ -1,3 +1,5 @@
+import { setRadarNetworkAllowed } from './services/radarDemand.js';
+import { setOnlineMode } from './utils/appNetworkMode.js';
 import useAirportResults from './hooks/useAirportResults.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './App.css';
@@ -19,7 +21,7 @@ import { FadeOverlay, CinematicReview } from './components/CinematicComponents.j
 import { LanguageProvider, TranslatedText } from './contexts/LanguageContext';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import Header from './components/Header';
-import DisplaySettings from './components/DisplaySettings';
+import SettingsPage from './components/SettingsPage.jsx';
 import FlightRecoveryPanel from './components/FlightRecoveryPanel';
 import { getRecoveryConfig } from './services/flightRecovery.js';
 import HomePage from './components/HomePage';
@@ -98,7 +100,6 @@ function App() {
   const [failureType, setFailureType] = useState('random');
   const [weatherData, setWeatherData] = useState(DEFAULT_WEATHER);
   const [cinematicPhase, setCinematicPhase] = useState('none');
-  const [showSettings, setShowSettings] = useState(false);
   const [showRouteSelection, setShowRouteSelection] = useState(false);
   const [appSettings, setAppSettings] = useState(() => {
     if (typeof window === 'undefined') {
@@ -126,6 +127,7 @@ function App() {
   const routeConfirmationRevisionRef = useRef(0);
 
   const offlineMode = appSettings.offlineMode;
+  useEffect(() => { setRadarNetworkAllowed(!offlineMode); setOnlineMode(!offlineMode); }, [offlineMode]);
   const activeUser = offlineMode ? null : authUser;
   const routeAuthState = buildRouteAuthState({ offlineMode, activeUser });
 
@@ -143,7 +145,7 @@ function App() {
 
   useEffect(() => {
     preloadLocalAipData();
-  }, []);
+  }, [offlineMode]);
 
   const departureResults = useAirportResults(departureQuery);
   const arrivalResults = useAirportResults(arrivalQuery);
@@ -403,6 +405,7 @@ function App() {
   }, [activeUser, appMode, authLoading, offlineMode]);
 
   useEffect(() => {
+    let cancelled = false;
     const calculateFlightPlanAsync = async () => {
       if (preflightConfig.selectedDeparture && preflightConfig.selectedArrival && preflightConfig.aircraftModel) {
         try {
@@ -411,10 +414,13 @@ function App() {
             preflightConfig.selectedArrival,
             preflightConfig.aircraftModel,
             preflightConfig.payload,
-            preflightConfig.fuelReserve
+            preflightConfig.fuelReserve,
+            { cruiseAltitude: preflightConfig.cruiseAltitudeManual ? preflightConfig.cruiseHeight : undefined }
           );
-          setPreflightConfig((prev) => ({ ...prev, flightPlan: plan }));
+          if (cancelled) return;
+          setPreflightConfig((prev) => ({ ...prev, flightPlan: plan, cruiseHeight: prev.cruiseAltitudeManual ? prev.cruiseHeight : (plan.cruiseAltitude ?? prev.cruiseHeight) }));
         } catch (error) {
+          if (cancelled) return;
           console.error('Error calculating flight plan:', error);
           setPreflightConfig((prev) => ({ ...prev, flightPlan: null }));
         }
@@ -423,7 +429,8 @@ function App() {
       }
     };
     calculateFlightPlanAsync();
-  }, [preflightConfig.selectedDeparture, preflightConfig.selectedArrival, preflightConfig.aircraftModel, preflightConfig.payload, preflightConfig.fuelReserve]);
+    return () => { cancelled = true; };
+  }, [preflightConfig.selectedDeparture, preflightConfig.selectedArrival, preflightConfig.aircraftModel, preflightConfig.payload, preflightConfig.fuelReserve, preflightConfig.cruiseAltitudeManual, preflightConfig.cruiseHeight]);
 
   const handleInitializeFlight = () => {
     setShowRouteSelection(true);
@@ -460,7 +467,6 @@ function App() {
       setActiveTutorial(null);
       setActiveChallenge(null);
       setIsTutorial(false);
-      setShowSettings(false);
       setCinematicPhase('none');
       setResumeCheckError(null);
       setFlightSessionId(previous => previous + 1);
@@ -655,11 +661,11 @@ function App() {
   };
 
   const handleOpenSettings = () => {
-    setShowSettings(true);
+    setAppMode('settings');
   };
 
   const handleCloseSettings = () => {
-    setShowSettings(false);
+    setAppMode('home');
   };
 
   const handleOfflineModeChange = (event) => {
@@ -837,6 +843,12 @@ function App() {
     </LanguageProvider>;
   }
 
+  if (appMode === 'settings') {
+    return <LanguageProvider>
+      <SettingsPage onBack={handleCloseSettings} offlineMode={offlineMode} onOfflineModeChange={handleOfflineModeChange} />
+    </LanguageProvider>;
+  }
+
   if (appMode === 'tutorial-hub') {
     return (
       <LanguageProvider>
@@ -872,39 +884,7 @@ function App() {
         onOpenSettings={handleOpenSettings}
         onRecoverFlight={() => setAppMode('recovery')}
       />
-      {showSettings && (
-        <div className="menu-settings-overlay" style={{
-          position: 'fixed',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 3000
-        }}>
-          <div className="menu-settings-panel" style={{
-            width: 'min(420px, calc(100vw - 32px))',
-            borderRadius: '12px',
-            padding: '20px',
-            color: '#f9fafb',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.4)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px' }}><TranslatedText>Settings</TranslatedText></h2>
-              <button aria-label="Close settings" onClick={handleCloseSettings} style={{ background: 'transparent', color: '#f9fafb', border: 'none', fontSize: '18px', cursor: 'pointer' }}>✕</button>
-            </div>
-            <DisplaySettings />
-            <label style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 600 }}><TranslatedText>Offline mode</TranslatedText></div>
-                <div style={{ color: '#9ca3af', fontSize: '14px', marginTop: '4px' }}>
-                  <TranslatedText>Disable multiplayer, cloud save, live weather, and network terrain fetches.</TranslatedText>
-                </div>
-              </div>
-              <input type="checkbox" checked={offlineMode} onChange={handleOfflineModeChange} />
-            </label>
-          </div>
-        </div>
-      )}
+
     </LanguageProvider>
   );
 }

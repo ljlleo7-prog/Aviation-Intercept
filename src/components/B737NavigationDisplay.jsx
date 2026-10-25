@@ -1,5 +1,7 @@
+import { getRadarPreferences } from '../utils/radarPreferences.js';
+import { useRadarView } from '../hooks/useRadarView.js';
 import { getMapAirports } from '../services/airportMapData.js';
-import { useEffect, useMemo, useState, useId, useCallback } from 'react';
+import { useEffect, useMemo, useState, useId, useCallback, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { airportService } from '../services/airportService';
 import { terrainRadarService } from '../services/TerrainRadarService';
@@ -21,14 +23,15 @@ export default function B737NavigationDisplay({ data }) {
   const mode = data.radarMode || 'map';
   const [, setCacheFrame] = useState(0);
   const clipId = useId();
+  const viewRef = useRef(null);
+  useRadarView(terrainRadarService, viewRef, mode === 'terrain', latitude, longitude, range, heading);
+  useRadarView(weatherRadarService, viewRef, mode === 'weather', latitude, longitude, range, heading);
   const waypoints = Array.isArray(data.waypoints) ? data.waypoints : [];
   const activeIndex = Number.isInteger(data.currentWaypointIndex) ? data.currentWaypointIndex : 0;
   const activeWaypoint = waypoints[activeIndex];
 
   useEffect(() => {
     if (!positionValid || (mode !== 'terrain' && mode !== 'weather')) return undefined;
-    if (mode === 'terrain') terrainRadarService.update(latitude, longitude, Math.min(range, 20), heading);
-    else weatherRadarService.update(latitude, longitude, Math.min(range, 80));
     const timer = setInterval(() => setCacheFrame(frame => frame + 1), 2000);
     return () => clearInterval(timer);
   }, [positionValid, latitude, longitude, heading, range, mode]);
@@ -59,11 +62,12 @@ export default function B737NavigationDisplay({ data }) {
   const radarTiles = (() => {
     if (!positionValid || (mode !== 'terrain' && mode !== 'weather')) return [];
     const service = mode === 'terrain' ? terrainRadarService : weatherRadarService;
-    const tileRange = Math.min(range, mode === 'terrain' ? 12 : 80);
-    const { latIdx: firstLat, lonIdx: firstLon } = service.getGridIndices(latitude - tileRange / 60, longitude - tileRange / 60);
-    const { latIdx: lastLat, lonIdx: lastLon } = service.getGridIndices(latitude + tileRange / 60, longitude + tileRange / 60);
+    const tileRange = Math.min(range, getRadarPreferences()[mode === 'terrain' ? 'terrainRange' : 'weatherRange']);
+    const longitudeRange = tileRange / 60 / Math.max(0.01, Math.cos(latitude * RAD));
+    const { latIdx: firstLat, lonIdx: firstLon } = service.getGridIndices(latitude - tileRange / 60, longitude - longitudeRange);
+    const { latIdx: lastLat, lonIdx: lastLon } = service.getGridIndices(latitude + tileRange / 60, longitude + longitudeRange);
     const tiles = [];
-    const step = mode === 'terrain' && range > 20 ? 2 : 1;
+    const step = Math.max(1, Math.ceil(Math.sqrt((lastLat - firstLat + 1) * (lastLon - firstLon + 1) / 2500)));
     for (let latIndex = firstLat; latIndex <= lastLat; latIndex += step) {
       for (let lonIndex = firstLon; lonIndex <= lastLon; lonIndex += step) {
         const lat = (latIndex + 0.5) * service.GRID_SIZE;
@@ -93,7 +97,7 @@ export default function B737NavigationDisplay({ data }) {
     }).filter(point => point && point.distance <= range && point.y >= 17 && point.y <= 106)
     : [];
 
-  return <>
+  return <g ref={viewRef}>
     <text x="3" y="7" className="green small">GS {Math.round(data.groundSpeed || 0)} TAS {Math.round(data.trueAirspeed || 0)}</text>
     <text x="117" y="7" textAnchor="end" className="magenta small">{activeWaypoint ? nameOf(activeWaypoint) : 'N/A'} {waypointDistance === null || !Number.isFinite(waypointDistance) ? '--.-' : waypointDistance.toFixed(1)}NM</text>
     <text x="60" y="17" textAnchor="middle" className="small">{String(Math.round(heading)).padStart(3, '0')} MAG</text>
@@ -127,7 +131,7 @@ export default function B737NavigationDisplay({ data }) {
       <path d="M60 100V20" stroke="white" strokeWidth=".5" strokeDasharray="2 3"/>
     </g>
     <text x="15" y="115" className="cyan tiny">VOR 1</text><text x="92" y="115" className="cyan tiny">VOR 2</text>
-  </>;
+  </g>;
 }
 
 B737NavigationDisplay.propTypes = { data: PropTypes.object.isRequired };

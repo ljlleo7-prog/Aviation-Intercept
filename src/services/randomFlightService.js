@@ -1,3 +1,4 @@
+import { recommendCruiseAltitude } from './flightPerformancePlanning.js';
 import airlinesData from '../data/airlinesDatabase.json';
 import { airportService } from './airportService.js';
 import aircraftService from './aircraftService.js';
@@ -139,7 +140,7 @@ class RandomFlightService {
 
     const rawFuelReserve = 0.1 + (Math.random() * 0.1);
     const fuelReserve = this.roundToSignificantDigits(rawFuelReserve, 3);
-    const rawCruiseHeight = Math.floor(28000 + (Math.random() * 12000));
+    const rawCruiseHeight = recommendCruiseAltitude(distance.nauticalMiles ?? distance, aircraft, payload).recommended;
     const cruiseHeight = Math.round(this.roundToSignificantDigits(rawCruiseHeight, 3));
 
     const useRandomTime = true;

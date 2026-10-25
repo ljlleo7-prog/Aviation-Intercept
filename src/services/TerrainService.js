@@ -1,10 +1,12 @@
+import { getRadarPreferences } from '../utils/radarPreferences.js';
 import { fetchElevationResponse } from './elevationRequests.js';
 
 const BASE_URL = 'https://api.open-elevation.com/api/v1/lookup';
 const FETCH_TIMEOUT_MS = 3000;
 
 export class TerrainService {
-  constructor() {
+  constructor({ requestElevation = fetchElevationResponse } = {}) {
+    this.requestElevation = requestElevation;
     this.cache = new Map(); // Key: "lat,lon" (rounded), Value: elevation
     this.lastCallTime = 0;
     this.pendingRequest = null;
@@ -18,7 +20,7 @@ export class TerrainService {
    * @param {number} lon 
    * @returns {Promise<number>} Elevation in meters
    */
-  async getElevation(lat, lon) {
+  async getElevation(lat, lon, { signal } = {}) {
     // Round to 3 decimal places (~100m precision) for caching
     const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
     if (this.cache.has(key)) {
@@ -28,7 +30,7 @@ export class TerrainService {
     const now = Date.now();
     const timeSinceLastCall = now - this.lastCallTime;
 
-    if (timeSinceLastCall < this.MIN_INTERVAL) {
+    if (timeSinceLastCall < Math.max(this.MIN_INTERVAL, getRadarPreferences().terrainInterval * 1000)) {
       // Return cached value if available, or wait? 
       // For smooth gameplay, returning previous nearest or waiting is better.
       // But we can't block. Let's return a promise that resolves later?
@@ -45,8 +47,8 @@ export class TerrainService {
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-      const response = await fetchElevationResponse(`${BASE_URL}?locations=${lat},${lon}`, {
-        signal: controller.signal
+      const response = await this.requestElevation(`${BASE_URL}?locations=${lat},${lon}`, {
+        signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
       });
       clearTimeout(timeoutId);
       timeoutId = null;

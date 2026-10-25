@@ -27,7 +27,7 @@ export default function AipPackSettings() {
   return <section className="settings-section" aria-busy={busy}>
     <h4>{tx('AIP data packs')}</h4>
     <p>{tx('Import the World AIP ZIP to store airports, runways, frequencies, navaids, and routes in this browser. Installed data is used before cloud lookups and costs no credits.')}</p>
-    <p>{tx('Cloud AIP requests require login and cost 1 credit per request, with a shared quota of 10 requests per minute. Cached results cost no additional credits.')}</p>
+    <p>{tx('Cloud AIP requests require login and record 1 credit per request, with a shared quota of 10 requests per minute. Credits do not deduct tokens now; token settlement may be required later. Cached results are free.')}</p>
     {downloadUrl && <p><a href={downloadUrl} target="_blank" rel="noreferrer">{tx('Download World AIP ZIP')}</a></p>}
     <label>{tx('Import AIP ZIP')}
       <input type="file" accept=".zip,application/zip" disabled={busy} onChange={event => {

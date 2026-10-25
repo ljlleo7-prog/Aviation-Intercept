@@ -1,3 +1,4 @@
+import { useRadarView } from '../hooks/useRadarView.js';
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -39,6 +40,11 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
   const { tx } = useLanguage();
   const [renderError, setRenderError] = useState(null);
   const hostRef = useRef(null);
+  const terrainCenter = Number.isFinite(flightData?.position?.latitude)
+    ? terrainRequestCenter(flightData.position.latitude, flightData.position.longitude, flightData.heading)
+    : { latitude: geometry?.airportLat, longitude: geometry?.airportLon };
+  useRadarView(terrainRadarService, hostRef, !renderError, terrainCenter.latitude, terrainCenter.longitude,
+    flightData?.position ? 20 : 10, flightData?.heading ?? geometry?.heading);
   const latestRef = useRef({ flightData, weatherData, timeZulu, timeScale, quality });
   latestRef.current = { flightData, weatherData, timeZulu, timeScale, quality };
 
@@ -59,7 +65,7 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
     renderer.setPixelRatio(outsideRenderBudget(initialQuality, host.clientWidth, host.clientHeight, window.devicePixelRatio).pixelRatio);
     host.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x89999f);
+    scene.background = new THREE.Color(0x78acd4);
     scene.fog = new THREE.FogExp2(0xa7b5ae, 0.00013);
     // Match distant terrain fog at the horizon, fading into the sky overhead.
     const horizonMaterial = new THREE.ShaderMaterial({
@@ -156,11 +162,10 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
         x, z
       });
     }
-    terrainRadarService.update(geometry.airportLat, geometry.airportLon, 10, geometry.heading);
-    let terrainCommitted = false; let terrainTimer;
+    let terrainCommitted = false; let committedGridSize = null; let terrainTimer;
     terrainTimer = window.setInterval(() => {
       if (document.hidden || !inViewport) return;
-      if (terrainCommitted) return;
+      if (terrainCommitted && committedGridSize === terrainRadarService.GRID_SIZE) return;
       const values = terrainCells.map((cell) => terrainRadarService.getTerrainHeight(cell.latitude, cell.longitude));
       const loaded = values.filter(Number.isFinite).length;
       if (loaded < values.length * .55) return;
@@ -175,7 +180,7 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
       terrainPosition.needsUpdate = true; terrainGeometry.computeVertexNormals(); terrainGeometry.computeBoundingSphere();
       terrain.visible = true;
       sceneRevision++;
-      terrainCommitted = true; window.clearInterval(terrainTimer);
+      terrainCommitted = true; committedGridSize = terrainRadarService.GRID_SIZE;
     }, 1000);
 
     const runwayLighting = [];
@@ -262,9 +267,6 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
         pendingTile = makeTileRequest(center.latitude, center.longitude);
       }
       // Refresh the fetch queue as we move, including retries after provider failure.
-      const requestOrigin = pendingTile?.origin || activeTile?.origin;
-      if (requestOrigin) terrainRadarService.update(requestOrigin.latitude, requestOrigin.longitude, 20,
-        latestRef.current.flightData?.heading ?? geometry.heading);
       if (activeTile) updateTileHeights(activeTile);
       if (!pendingTile) return;
       const values = pendingTile.cells.map((cell) => terrainRadarService.getTerrainHeight(cell.latitude, cell.longitude));
@@ -304,7 +306,8 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
     };
     const streamTimer = window.setInterval(streamTerrain, 1200);
 
-    const daySky = new THREE.Color(0x89999f); const nightSky = new THREE.Color(0x182536);
+    const daySky = new THREE.Color(0x78acd4); const nightSky = new THREE.Color(0x182536);
+    const greySky = new THREE.Color(0x89999f);
     const dayFog = new THREE.Color(0xa7b5ae); const nightFog = new THREE.Color(0x273545);
     const cruiseSky = new THREE.Color(0x2873c7); const cruiseFog = new THREE.Color(0x96bce3);
     const atmosphereColor = new THREE.Color();
@@ -411,17 +414,17 @@ export default function OutsideFlightScene({ flightData, weatherData, geometry, 
         renderer.toneMappingExposure = .75 + .3 * factor;
         lastLightUpdate = now;
       }
-      const groundLightScale = .85 + .15 * atmosphere.cruiseBlend;
+      const groundLightScale = 1 - .15 * atmosphere.gloom;
       hemi.intensity = .35 + 1.45 * daylight * groundLightScale;
       sun.intensity = 2 * daylight * groundLightScale;
-      atmosphereColor.copy(daySky).lerp(cruiseSky, atmosphere.cruiseBlend);
+      atmosphereColor.copy(daySky).lerp(cruiseSky, atmosphere.cruiseBlend).lerp(greySky, atmosphere.gloom);
       scene.background.copy(nightSky).lerp(atmosphereColor, daylight);
       atmosphereColor.copy(dayFog).lerp(cruiseFog, atmosphere.cruiseBlend);
       scene.fog.color.copy(nightFog).lerp(atmosphereColor, daylight);
       horizonSky.position.copy(camera.position);
       horizonMaterial.uniforms.hazeStrength.value = 1 - THREE.MathUtils.smoothstep(visibilityM, 8000, 20000);
       const fingerprint = [position.latitude, position.longitude, mslFt, state?.heading, state?.pitch, state?.roll,
-        visibilityM, source, daylight, aircraftLights.map(light => light.visible ? light.intensity : 0).join(','), effectiveQuality, enroute, sceneRevision].join(':');
+        visibilityM, atmosphere.gloom, source, daylight, aircraftLights.map(light => light.visible ? light.intensity : 0).join(','), effectiveQuality, enroute, sceneRevision].join(':');
       if (fingerprint === lastFingerprint) return;
       lastFingerprint = fingerprint;
       airportGround.update(camera, visibilityM, daylight, effectiveQuality === 'economy', enroute, now);

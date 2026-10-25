@@ -1,7 +1,9 @@
 import { fetchElevationResponse } from './elevationRequests.js';
+import { attachRadarDemand } from './radarDemand.js';
 
 export class TerrainRadarService {
-    constructor() {
+    constructor({ requestElevation = fetchElevationResponse } = {}) {
+        this.requestElevation = requestElevation;
         this.GRID_SIZE = 0.01; // 0.01 degrees resolution (approx 1.1km or 0.6nm)
         this.cache = new Map(); // Key: "latIdx_lonIdx", Value: height (ft)
         this.fetchQueue = []; // Array of { key, latIdx, lonIdx, lat, lon, distSq }
@@ -17,7 +19,7 @@ export class TerrainRadarService {
 
         // Start the fetch loop only in browser/runtime usage
         if (typeof window !== 'undefined') {
-            this.startFetcher();
+            this.demand = attachRadarDemand(this, 'terrain', () => this.fetchNextBatch());
         }
     }
 
@@ -145,7 +147,7 @@ export class TerrainRadarService {
         } finally {
             batch.forEach(item => this.inFlightKeys.delete(item.key));
             // Deferred or failed cells remain eligible for better data later.
-            this.fetchQueue.push(...batch.filter(item => !this.cache.has(item.key)));
+            if (!this.requestSignal?.aborted) this.fetchQueue.push(...batch.filter(item => !this.cache.has(item.key)));
             this.isFetching = false;
         }
     }
@@ -172,27 +174,19 @@ export class TerrainRadarService {
         const locationsParam = batch.map(item => `${item.lat.toFixed(5)},${item.lon.toFixed(5)}`).join('|');
         
         // Primary: Open-Elevation
-        // Note: Using corsproxy.io to bypass potential CORS/Mixed-Content issues on production (GitHub Pages)
         const urlPrimary = `https://api.open-elevation.com/api/v1/lookup?locations=${locationsParam}`;
         
         // Secondary: OpenTopoData (ASTER 30m Global)
         // Public API: https://api.opentopodata.org/v1/aster30m
         const urlSecondary = `https://api.opentopodata.org/v1/aster30m?locations=${locationsParam}`;
 
-        // CORS Proxy: Used to wrap requests for static site deployment (GitHub Pages)
-        // where no backend proxy is available.
-        const corsProxy = 'https://corsproxy.io/?';
-
         let success = false;
 
         // Try Primary
         try {
-            // console.log("Terrain: Trying Primary (Open-Elevation)...");
-            // Try direct first, if that fails (network/cors), we could try proxy, 
-            // but usually for CORS it fails instantly. 
-            // Let's try wrapping with proxy to be safe for production if direct is known to be flaky with CORS.
-            // However, Open-Elevation often supports CORS. Let's try direct first for Primary.
-            const response = await fetchElevationResponse(urlPrimary, { signal: AbortSignal.timeout(8000) });
+            const response = await this.requestElevation(urlPrimary, { signal: this.requestSignal ? AbortSignal.any([this.requestSignal, AbortSignal.timeout(8000)]) : AbortSignal.timeout(8000) });
+            if (!response) return;
+            if ([401, 402, 403, 503].includes(response.status)) return;
             if (response) {
                 if (!response.ok) throw new Error(`Primary API Error: ${response.status}`);
                 const data = await response.json();
@@ -205,12 +199,11 @@ export class TerrainRadarService {
             console.warn("Terrain: Primary API failed, switching to Secondary...", error);
         }
 
-        // Try Secondary if Primary failed
+        if (this.requestSignal?.aborted) return;
+        // Both providers pass through the authenticated, metered gateway.
         if (!success) {
             try {
-                // console.log("Terrain: Trying Secondary (OpenTopoData)...");
-                // OpenTopoData often has strict CORS. Use proxy.
-                const response = await fetchElevationResponse(corsProxy + encodeURIComponent(urlSecondary), { signal: AbortSignal.timeout(8000) });
+                const response = await this.requestElevation(urlSecondary, { signal: this.requestSignal ? AbortSignal.any([this.requestSignal, AbortSignal.timeout(8000)]) : AbortSignal.timeout(8000) });
                 if (!response) return;
                 if (!response.ok) throw new Error(`Secondary API Error: ${response.status}`);
                 const data = await response.json();
@@ -231,6 +224,7 @@ export class TerrainRadarService {
     }
 
     processResults(batch, results) {
+        if (this.isRequestCurrent && !this.isRequestCurrent()) return;
         results.forEach((result, index) => {
             // Match result back to batch item
             if (index < batch.length) {
@@ -247,4 +241,4 @@ export class TerrainRadarService {
 
 export const terrainRadarService = new TerrainRadarService();
 
-if (import.meta.hot) import.meta.hot.dispose(() => terrainRadarService.stopFetcher());
+if (import.meta.hot) import.meta.hot.dispose(() => { terrainRadarService.demand?.dispose(); terrainRadarService.stopFetcher(); });

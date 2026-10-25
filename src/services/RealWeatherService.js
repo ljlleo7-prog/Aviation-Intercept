@@ -5,10 +5,13 @@
  * No API key required.
  */
 
+import { fetchElevationResponse } from './elevationRequests.js';
+
 const BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 
-class RealWeatherService {
-  constructor() {
+export class RealWeatherService {
+  constructor({ requestWeather = fetchElevationResponse } = {}) {
+    this.requestWeather = requestWeather;
     this.cache = {};
     this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
   }
@@ -108,7 +111,8 @@ class RealWeatherService {
         precipitation_unit: 'mm',
       });
 
-      const response = await fetch(`${BASE_URL}?${params.toString()}`, { signal });
+      const response = await this.requestWeather(`${BASE_URL}?${params.toString()}`, { signal });
+      if (!response) throw new Error('Weather request deferred.');
       if (!response.ok) {
         throw new Error(`Weather API error: ${response.statusText}`);
       }

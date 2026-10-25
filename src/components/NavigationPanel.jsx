@@ -1,3 +1,5 @@
+import { getRadarPreferences } from '../utils/radarPreferences.js';
+import { useRadarView } from '../hooks/useRadarView.js';
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import LocalRouteMap from './LocalRouteMap';
 import { calculateDistance } from '../utils/distanceCalculator';
@@ -8,8 +10,6 @@ import { weatherRadarService } from '../services/WeatherRadarService';
 // Navigation Panel Component
 const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], runwayGeometry, autopilotMode, weatherData, theme, showRangeRings = true, planeStyle = 'filled', efisFontFamily }) => {
   const radarCanvasRef = useRef(null);
-  const lastTerrainUpdateRef = useRef(0);
-  const lastWeatherUpdateRef = useRef(0);
   const [mapRange, setMapRange] = useState(40); // Default 40nm
   const [displayMode, setDisplayMode] = useState('map');
   const [showLocalRouteMap, setShowLocalRouteMap] = useState(false);
@@ -58,32 +58,8 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
     );
   }, [flightState?.latitude, flightState?.longitude, mapRange]);
 
-  // Effect to update Terrain Radar
-  useEffect(() => {
-    if (!flightState?.latitude || !flightState?.longitude) return;
-    
-    // Throttle updates to avoid heavy calculation every frame
-    const now = Date.now();
-    if (now - lastTerrainUpdateRef.current > 1000) {
-        // Update terrain radar service with current position and range
-        // Clamp range to 80nm to prevent massive queue buildup and lag
-        // The user can zoom out to 640nm, but we only fetch detailed terrain within 80nm
-        const fetchRange = Math.min(mapRange, 80);
-        terrainRadarService.update(flightState.latitude, flightState.longitude, fetchRange, heading);
-        lastTerrainUpdateRef.current = now;
-    }
-    
-  }, [flightState?.latitude, flightState?.longitude, mapRange]);
-
-  // Effect to update Weather Radar (throttled, coarser grid)
-  useEffect(() => {
-    if (!flightState?.latitude || !flightState?.longitude) return;
-    const now = Date.now();
-    if (now - lastWeatherUpdateRef.current > 30000) { // 30s — weather changes slowly
-      weatherRadarService.update(flightState.latitude, flightState.longitude, Math.min(mapRange, 160));
-      lastWeatherUpdateRef.current = now;
-    }
-  }, [flightState?.latitude, flightState?.longitude, mapRange]);
+  useRadarView(terrainRadarService, radarCanvasRef, displayMode === 'terrain', flightState?.latitude, flightState?.longitude, mapRange, heading);
+  useRadarView(weatherRadarService, radarCanvasRef, displayMode === 'weather', flightState?.latitude, flightState?.longitude, mapRange, heading);
 
   const distanceToWaypoint = useMemo(() => {
     if (!flightState || !selectedArrival) {
@@ -201,16 +177,15 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
         const gridSizePx = Math.ceil(gridSizeNm * pxPerNm);
         
         // Optimization: Limit render range to prevent lag on large maps
-        // We only fetch up to 80nm, so rendering beyond that is useless anyway
-        // Also implement LOD (Level of Detail) stepping for large ranges
-        const renderRange = Math.min(mapRange, 160); 
+        // Respect the configured sampling range and reduce detail at wide zooms.
+        const renderRange = Math.min(mapRange, getRadarPreferences().terrainRange);
         const step = mapRange > 40 ? Math.ceil(mapRange / 40) : 1;
         
         const rangeDeg = renderRange / 60;
         const startLat = flightState.latitude - rangeDeg;
         const endLat = flightState.latitude + rangeDeg;
-        const startLon = flightState.longitude - rangeDeg;
-        const endLon = flightState.longitude + rangeDeg;
+        const startLon = flightState.longitude - rangeDeg / Math.max(0.01, Math.cos(flightState.latitude * Math.PI / 180));
+        const endLon = flightState.longitude + rangeDeg / Math.max(0.01, Math.cos(flightState.latitude * Math.PI / 180));
         
         const startIdx = terrainRadarService.getGridIndices(startLat, startLon);
         const endIdx = terrainRadarService.getGridIndices(endLat, endLon);
@@ -255,9 +230,10 @@ const NavigationPanel = ({ flightState, selectedArrival, flightPlan, npcs = [], 
         const pxPerNm = radius / mapRange;
         const gridSizeNm = weatherRadarService.GRID_SIZE * 60;
         const gridSizePx = Math.ceil(gridSizeNm * pxPerNm);
-        const rangeDeg = mapRange / 60;
-        const startIdx = weatherRadarService.getGridIndices(flightState.latitude - rangeDeg, flightState.longitude - rangeDeg);
-        const endIdx   = weatherRadarService.getGridIndices(flightState.latitude + rangeDeg, flightState.longitude + rangeDeg);
+        const rangeDeg = Math.min(mapRange, getRadarPreferences().weatherRange) / 60;
+        const longitudeRange = rangeDeg / Math.max(0.01, Math.cos(flightState.latitude * Math.PI / 180));
+        const startIdx = weatherRadarService.getGridIndices(flightState.latitude - rangeDeg, flightState.longitude - longitudeRange);
+        const endIdx   = weatherRadarService.getGridIndices(flightState.latitude + rangeDeg, flightState.longitude + longitudeRange);
         for (let i = startIdx.latIdx; i <= endIdx.latIdx; i++) {
           for (let j = startIdx.lonIdx; j <= endIdx.lonIdx; j++) {
             const tileLat = (i + 0.5) * weatherRadarService.GRID_SIZE;

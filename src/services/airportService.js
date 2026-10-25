@@ -1,4 +1,5 @@
 import { loadInstalledAipPack } from './aipPackStorage.js';
+import { isOfflineMode } from '../utils/appNetworkMode.js';
 import airportDatabase from '../data/airportDatabase.json';
 import { getVisualRunwayGeometry, getSourcedRunwayNames } from '../data/visualRunwayCoordinates.js';
 import sceneryRunways from '../data/sceneryRunways.js';
@@ -24,18 +25,22 @@ class AirportService {
   }
 
   async loadInstalledAirports() {
-    if (!this.installedAirportsPromise) this.installedAirportsPromise = loadInstalledAipPack().then(pack => {
-      if (!pack) return false;
-      const known = new Map(this.allAirports.map(airport => [airport.icao, airport]));
+    const pack = await loadInstalledAipPack();
+    const offline = isOfflineMode();
+    if (this.installedAipSource === pack && this.offlineAirportData === offline) return Boolean(pack);
+    this.installedAipSource = pack;
+    this.offlineAirportData = offline;
+    this.allAirports = [...this.builtInAirports];
+    if (pack) {
+      const known = new Map(this.builtInAirports.map(airport => [airport.icao, airport]));
       for (const airport of pack.airports) {
         const local = known.get(airport.icao);
         // Keep scenery geometry; fill missing fields from the AIP bundle.
         known.set(airport.icao, local ? { ...airport, ...local } : airport);
       }
       this.allAirports = [...known.values()];
-      return true;
-    });
-    return this.installedAirportsPromise;
+    }
+    return Boolean(pack);
   }
 
   applySceneryReferences(references) {
@@ -52,6 +57,7 @@ class AirportService {
       if (index >= 0) this.allAirports[index] = airport;
       else this.allAirports.push(airport);
     }
+    this.builtInAirports = [...this.allAirports];
   }
 
   getAllAirports() {
@@ -108,6 +114,7 @@ class AirportService {
   async searchAirportsRemote(query, options = {}) {
     if (await this.loadInstalledAirports()) return this.searchAirports(query, options);
     const localResults = this.searchAirports(query, options);
+    if (isOfflineMode()) return localResults;
     if (!query || query.trim().length < 2) return [];
     const responses = await Promise.allSettled([
       searchSupabaseAirports(query.trim(), options),
@@ -131,6 +138,7 @@ class AirportService {
   async getAirportByCodeRemote(code) {
     if (await this.loadInstalledAirports()) return this.getAirportByCode(code) || null;
     const localAirport = this.getAirportByCode(code);
+    if (isOfflineMode()) return localAirport || null;
     const [supabaseResponse, ourAirportResponse, referenceResponse] = await Promise.all([
       getSupabaseAirportDetails(code),
       getOurAirportByCode({ code }),
@@ -147,6 +155,7 @@ class AirportService {
   async getAirportsWithinRadiusRemote(latitude, longitude, radiusNm, options = {}) {
     if (await this.loadInstalledAirports()) return this.getAirportsWithinRadius(latitude, longitude, radiusNm, options);
     const localResults = this.getAirportsWithinRadius(latitude, longitude, radiusNm, options);
+    if (isOfflineMode()) return localResults;
     const [supabaseResponse, ourAirportsResponse, referenceResponse] = await Promise.all([
       getSupabaseAirportsWithinRadius(latitude, longitude, radiusNm, options),
       getNearbyOurAirports({ latitude, longitude, radiusNm }),
@@ -161,7 +170,8 @@ class AirportService {
   }
 
   async getEmergencyLandingOptionsRemote(options = {}) {
-    const response = await findSupabaseEmergencyLandingOptions(options);
+    await this.loadInstalledAirports();
+    const response = isOfflineMode() ? null : await findSupabaseEmergencyLandingOptions(options);
     if (response?.status === 'ok' && Array.isArray(response.options)) return response.options;
 
     const localAirports = this.getAirportsWithinRadius(

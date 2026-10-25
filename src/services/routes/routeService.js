@@ -1,4 +1,5 @@
 import { loadInstalledAipPack } from '../aipPackStorage.js';
+import { isOfflineMode } from '../../utils/appNetworkMode.js';
 import { fetchFlightPlanDbRoute } from './adapters/flightPlanDbAdapter.js';
 import { fetchProcedureData } from './adapters/procedureDataAdapter.js';
 import { fetchFaaCifpProcedures } from './adapters/faaCifpAdapter.js';
@@ -114,7 +115,8 @@ const buildReferenceEnrichedRoute = (route, referenceResponse) => {
       referenceEnriched: true
     },
     billing: {
-      chargedTokens: Number(route.billing?.chargedTokens || 0) + Number(referenceResponse.billing?.chargedTokens || 0)
+      chargedTokens: Number(route.billing?.chargedTokens || 0) + Number(referenceResponse.billing?.chargedTokens || 0),
+      creditsConsumed: Number(route.billing?.creditsConsumed || 0) + Number(referenceResponse.billing?.creditsConsumed || 0)
     }
   });
 };
@@ -159,6 +161,8 @@ export const generateUnifiedRoute = async ({
   options = {},
   debugResponses = {}
 } = {}) => {
+  const offline = authState === 'offline' || options.offlineMode === true || isOfflineMode();
+  if (offline) authState = 'offline';
   const installedAip = await loadInstalledAipPack();
   const cacheKey = buildRouteCacheKey({
     provider: 'route',
@@ -174,13 +178,13 @@ export const generateUnifiedRoute = async ({
 
   const cached = getCachedRoute(cacheKey, EXTERNAL_ROUTE_TTL_MS);
   const debug = createRouteDebugLog();
-  if (cached) {
+  if (cached && (!offline || [ROUTE_SOURCES.BUILT_IN, ROUTE_SOURCES.LOCAL_AIP].includes(cached.source))) {
     appendRouteDebug(debug, { provider: cached.source || ROUTE_SOURCES.BUILT_IN, status: PROVIDER_STATUS.CACHE_HIT, message: 'Route cache hit', cached: true });
-    return { ...cached, debug, cached: true };
+    return { ...cached, debug, cached: true, billing: { chargedTokens: 0, creditsConsumed: 0 } };
   }
 
   const routeProviders = authState === 'authenticated' ? guardedRouteProviders : [];
-  const aipProviderMode = options.aipProviderMode
+  const aipProviderMode = offline ? AIP_PROVIDER_MODES.LOCAL_ONLY : options.aipProviderMode
     || options.localAip?.providerMode
     || options.supabaseAip?.providerMode
     || AIP_PROVIDER_MODES.LOCAL_ONLY;
@@ -191,6 +195,7 @@ export const generateUnifiedRoute = async ({
       arrival,
       options: {
         ...(options.localAip || options),
+        allowNetwork: !offline,
         limit: options.routeAlternativeLimit || options.localAip?.limit || 8
       }
     });
@@ -216,6 +221,7 @@ export const generateUnifiedRoute = async ({
   };
 
   const trySupabaseAip = async () => {
+    if (authState !== 'authenticated' || isOfflineMode()) return null;
     const response = await searchSupabaseAipRoute({
       departure,
       arrival,
@@ -253,8 +259,9 @@ export const generateUnifiedRoute = async ({
     }
     if (aipProviderMode === AIP_PROVIDER_MODES.LOCAL_ONLY) {
       const builtIn = buildBuiltInRoute({ departure, arrival, debug });
-      setCachedRoute(cacheKey, { ...builtIn.route, debug, fallbackUsed: true });
-      return { ...builtIn.route, debug, fallbackUsed: true };
+      const fallback = { ...builtIn.route, debug, fallbackUsed: true, billing: { chargedTokens: 0, creditsConsumed: 0 } };
+      setCachedRoute(cacheKey, fallback);
+      return fallback;
     }
   }
 
@@ -372,7 +379,7 @@ export const generateUnifiedRoute = async ({
   }
   const chargedFallback = [...debug]
     .reverse()
-    .find((entry) => Number(entry?.billing?.chargedTokens || 0) > 0)?.billing || null;
+    .find((entry) => Number(entry?.billing?.chargedTokens || 0) > 0 || Number(entry?.billing?.creditsConsumed || 0) > 0)?.billing || null;
   appendRouteDebug(debug, { provider: ROUTE_SOURCES.BUILT_IN, status: PROVIDER_STATUS.OK, message: routeAfterReference.source === ROUTE_SOURCES.AIRPORT_REFERENCE ? 'Using reference-enriched fallback' : 'Using built-in fallback', fallback: true, billing: routeAfterReference.billing || builtIn.route.billing });
   const finalRoute = {
     ...routeAfterReference,

@@ -7,6 +7,8 @@ import { readDisplayPreferences, writeDisplayPreferences } from '../utils/displa
 import { flightKeyboardHelp } from '../config/flightKeyboard.js';
 import './SettingsPanel.css';
 import SceneryPackSettings from './SceneryPackSettings.jsx';
+import RadarSettings from './RadarSettings.jsx';
+import ApiUsageSettings from './ApiUsageSettings.jsx';
 
 export default function DisplaySettings({ visualQuality, onUpdateVisualQuality }) {
   const { tx, language, setLanguage } = useLanguage();
@@ -51,6 +53,8 @@ export default function DisplaySettings({ visualQuality, onUpdateVisualQuality }
       </label>
       <details><summary>{tx('Keyboard controls')}</summary><p>{tx(flightKeyboardHelp)}</p></details>
     </section>
+    <RadarSettings />
+    <ApiUsageSettings />
     <SceneryPackSettings />
     <AipPackSettings />
   </div>;

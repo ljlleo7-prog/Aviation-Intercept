@@ -21,7 +21,7 @@ const FMCPerformance = ({ preflightConfig, aircraftData, flightState, weatherDat
   const cruiseHeight = clampNumber(preflightConfig?.cruiseHeight, 0, 0);
   const flightPlanFuel = preflightConfig?.flightPlan?.fuel || {};
   const dryOperatingMass = clampNumber(aircraftData?.emptyWeight || aircraftData?.mass, 70000, 0);
-  const estimatedTakeoffWeight = dryOperatingMass + payload + (pax * 90) + clampNumber(flightPlanFuel.totalFuel, 0, 0);
+  const estimatedTakeoffWeight = dryOperatingMass + payload + clampNumber(flightPlanFuel.totalFuel, 0, 0) - clampNumber(flightPlanFuel.taxiFuel, 0, 0);
   const estimatedLandingWeight = dryOperatingMass + payload + clampNumber(flightPlanFuel.reserveFuel, 0, 0);
   const takeoffReferenceWeight = clampNumber(aircraftData?.maxTakeoffWeight, 79000, 1);
   const landingReferenceWeight = clampNumber(aircraftData?.maxLandingWeight || aircraftData?.maxTakeoffWeight * 0.85, 66000, 1);
@@ -101,15 +101,20 @@ const FMCPerformance = ({ preflightConfig, aircraftData, flightState, weatherDat
 
           <div className="fmc-input-group">
             <label>{tx("Cruise altitude (ft)")}</label>
-            <input type="number" min="1000" step="1000" value={cruiseHeight} onChange={(e) => handleChange('cruiseHeight', e.target.value, 1000)} />
+            <input type="number" min="1000" max="41000" step="1000" value={cruiseHeight} onChange={(e) => onUpdatePreflight?.({ cruiseHeight: Math.max(1000, Math.min(41000, Number(e.target.value))), cruiseAltitudeManual: true })} />
             <small>{tx("Target cruise altitude handed off into the flight runtime.")}</small>
+            {flightPlanFuel.altitudeRange && <small>{flightPlanFuel.altitudeRange.min}–{flightPlanFuel.altitudeRange.max} ft</small>}
+            <button type="button" onClick={() => onUpdatePreflight?.({ cruiseAltitudeManual: false })}>AUTO</button>
           </div>
         </div>
       </div>
 
       <div className="fmc-section">
         <div className="fmc-label">{tx("Flight plan fuel")}</div>
+        {flightPlanFuel.warnings?.map(warning => <div key={warning} role="status">{warning}</div>)}
         <div className="fmc-route-summary-grid">
+          <div className="fmc-stat-card"><span className="fmc-stat-label">Taxi</span><span className="fmc-stat-value">{formatNumber(flightPlanFuel.taxiFuel, 0, ' kg')}</span></div>
+          <div className="fmc-stat-card"><span className="fmc-stat-label">Climb</span><span className="fmc-stat-value">{formatNumber(flightPlanFuel.climbFuel, 0, ' kg')}</span></div>
           <div className="fmc-stat-card"><span className="fmc-stat-label">{tx("Trip fuel")}</span><span className="fmc-stat-value">{formatNumber(flightPlanFuel.tripFuel, 0, ' kg')}</span></div>
           <div className="fmc-stat-card"><span className="fmc-stat-label">{tx("Reserve fuel")}</span><span className="fmc-stat-value">{formatNumber(flightPlanFuel.reserveFuel, 0, ' kg')}</span></div>
           <div className="fmc-stat-card"><span className="fmc-stat-label">{tx("Total fuel")}</span><span className="fmc-stat-value">{formatNumber(flightPlanFuel.totalFuel, 0, ' kg')}</span></div>

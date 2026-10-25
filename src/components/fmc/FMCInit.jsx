@@ -134,9 +134,12 @@ const FMCInit = ({ aircraftData, preflightConfig, onUpdatePreflight, aircraftSug
         <input
           type="number"
           value={preflightConfig?.cruiseHeight || 0}
-          onChange={(e) => onUpdatePreflight?.({ cruiseHeight: Number(e.target.value) })}
+          onChange={(e) => onUpdatePreflight?.({ cruiseHeight: Math.min(41000, Number(e.target.value)), cruiseAltitudeManual: true })}
           step="1000"
+          max="41000"
         />
+        <small>{preflightConfig?.flightPlan?.altitudeRange && `${preflightConfig.flightPlan.altitudeRange.min}–${preflightConfig.flightPlan.altitudeRange.max} ft`} </small>
+        <button type="button" onClick={() => onUpdatePreflight?.({ cruiseAltitudeManual: false })}>AUTO</button>
       </div>
 
       <div className="fmc-section">

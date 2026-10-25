@@ -1,3 +1,4 @@
+import { takeoffThrustFraction } from './flightPerformancePlanning.js';
 /**
  * FADECService — Airbus thrust lever / FADEC detent logic.
  *
@@ -15,7 +16,7 @@ const PROFILES = {
     A320: [
         { name: 'IDLE', lever: 0.00, n1Frac: 0.22 },
         { name: 'CLB',  lever: 0.55, n1Frac: 0.87 },
-        { name: 'FLEX', lever: 0.75, n1Frac: 0.92 },
+        { name: 'FLEX', lever: 0.75, n1Frac: 1.00 },
         { name: 'MCT',  lever: 0.85, n1Frac: 0.95 },
         { name: 'TOGA', lever: 1.00, n1Frac: 1.00 },
     ],
@@ -70,7 +71,9 @@ export class FADECService {
         this.mode = 'IDLE';
     }
 
-    setFlexTemp(temp) { this.flexTemp = temp; }
+    setFlexTemp(temp) { this.flexTemp = temp === null ? null : Number(temp); }
+
+    setPerformanceContext(context) { this.performanceContext = context; }
 
     getModeBand(lever) {
         if (lever <= this.detents[0].lever) {
@@ -92,8 +95,9 @@ export class FADECService {
     applyModeAdjustments(mode, n1Frac, altitude) {
         let adjusted = n1Frac;
         if (mode === 'FLEX' && this.flexTemp !== null) {
-            const derate = Math.max(0, (this.flexTemp - 15) * 0.005);
-            adjusted = Math.max(0.80, adjusted - derate);
+            const fraction = takeoffThrustFraction({ ...this.performanceContext, assumedTemperature: this.flexTemp });
+            // Engine thrust follows approximately N1^2.5, so derate thrust, not N1 linearly.
+            adjusted = 0.05 + (adjusted - 0.05) * Math.pow(fraction, 1 / 2.5);
         }
         if (mode === 'CLB' && altitude > 10000) {
             adjusted = Math.max(0.82, adjusted - 0.02);
@@ -107,8 +111,8 @@ export class FADECService {
         const band = this.getModeBand(lever);
         this.mode = band.mode;
 
-        const lowerFrac = this.applyModeAdjustments(band.mode, band.lower.n1Frac, altitude);
-        const upperFrac = this.applyModeAdjustments(band.mode, band.upper.n1Frac, altitude);
+        const lowerFrac = this.applyModeAdjustments(band.lower.name, band.lower.n1Frac, altitude);
+        const upperFrac = this.applyModeAdjustments(band.upper.name, band.upper.n1Frac, altitude);
         const commandedFrac = lowerFrac + (upperFrac - lowerFrac) * band.t;
 
         return maxN1 * commandedFrac;

@@ -274,6 +274,7 @@ class RealisticFlightPhysicsService {
             chord,
             groundGravityArm,
             groundLiftArm,
+            maxTakeoffWeight: data.maxTakeoffWeight || 79000,
             maxThrust: data.maxThrustPerEngine || 120000,
             engineCount: data.engineCount || 2,
             enginePositions: data.enginePositions || (function() {
@@ -850,6 +851,7 @@ class RealisticFlightPhysicsService {
              // We pass a synthetic throttle (0–1) that maps to the FADEC N1 fraction.
              if (this.fadec && engineThrottle >= 0) {
                  const altitudeFt = -this.state.pos.z * 3.28084;
+                 this.fadec.setPerformanceContext({ mass: this.state.mass, maxTakeoffWeight: this.aircraft.maxTakeoffWeight, ambientTemperature: env.temp });
                  const fadecN1 = this.fadec.targetN1(engineThrottle, this.aircraft.maxN1 || 102, altitudeFt);
                  // Convert back to 0–1 throttle so EnginePhysicsService can use it normally
                  const maxN1 = this.aircraft.maxN1 || 102;

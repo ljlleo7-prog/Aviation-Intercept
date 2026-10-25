@@ -34,9 +34,9 @@ function calculateFlightTime(distance, averageSpeed = 450) {
 }
 
 // Enhanced fuel calculation with aircraft-specific parameters
-async function calculateFuelConsumption(distance, aircraftModel, payload = 0, reserves = 1.0) {
+async function calculateFuelConsumption(distance, aircraftModel, payload = 0, reserves = 1.0, options = {}) {
   try {
-    const fuelData = await aircraftService.calculateFuelRequirements(aircraftModel, distance, payload, reserves);
+    const fuelData = await aircraftService.calculateFuelRequirements(aircraftModel, distance, payload, reserves, options);
     return fuelData;
   } catch (error) {
     // Fallback to generic calculation if aircraft not found
@@ -67,7 +67,7 @@ async function calculateFuelConsumption(distance, aircraftModel, payload = 0, re
 }
 
 // Calculate complete flight plan with aircraft-specific data
-async function calculateFlightPlan(departureAirport, arrivalAirport, aircraftModel, payload = 0, fuelReserve = 0.1) {
+async function calculateFlightPlan(departureAirport, arrivalAirport, aircraftModel, payload = 0, fuelReserve = 0.1, options = {}) {
   if (!departureAirport || !arrivalAirport) {
     throw new Error('Both departure and arrival airports are required');
   }
@@ -87,11 +87,17 @@ async function calculateFlightPlan(departureAirport, arrivalAirport, aircraftMod
     flightTime = calculateFlightTime(distance);
   }
 
-  const fuelData = await calculateFuelConsumption(distance, aircraftModel, payload, fuelReserve);
+  const fuelData = await calculateFuelConsumption(distance, aircraftModel, payload, fuelReserve, { ...options, fieldElevation: Math.max(Number(departureAirport.elevation) || 0, Number(arrivalAirport.elevation) || 0) });
   
   // Get aircraft performance data
   const aircraft = await aircraftService.getAircraftByModel(aircraftModel);
   const performance = aircraft ? await aircraftService.calculateFlightPerformance(aircraftModel, distance, payload) : null;
+
+  const validation = aircraft ? await aircraftService.validateRoute(aircraftModel, distance, payload) : null;
+  if (validation && fuelData.warnings?.length) {
+    validation.warnings = [...new Set([...(validation.warnings || []), ...fuelData.warnings])];
+    validation.isValid = validation.isValid && fuelData.feasible;
+  }
 
   // Generate route waypoints
   const waypoints = generateRouteWaypoints(departureAirport, arrivalAirport);
@@ -118,8 +124,10 @@ async function calculateFlightPlan(departureAirport, arrivalAirport, aircraftMod
       kilometers: Math.round(distance * 1.852),
       statuteMiles: Math.round(distance * 1.151)
     },
-    time: flightTime,
+    time: fuelData.flightMinutes ? { hours: Math.floor((fuelData.flightMinutes + 15) / 60), minutes: Math.round((fuelData.flightMinutes + 15) % 60), totalMinutes: Math.round(fuelData.flightMinutes + 15) } : flightTime,
     fuel: fuelData,
+    cruiseAltitude: fuelData.cruiseAltitude,
+    altitudeRange: fuelData.altitudeRange,
     aircraft: aircraft ? {
       model: aircraft.model,
       manufacturer: aircraft.manufacturer,
@@ -130,7 +138,7 @@ async function calculateFlightPlan(departureAirport, arrivalAirport, aircraftMod
     } : null,
     performance: performance ? performance.performance : null,
     waypoints: waypoints,
-    validation: performance ? await aircraftService.validateRoute(aircraftModel, distance, payload) : null
+    validation
   };
 }
 
