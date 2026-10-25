@@ -1,4 +1,4 @@
-import{j as e}from"./index-cefbf46c.js";const u=`
+import{j as e}from"./index-96ed6889.js";const u=`
 .b744-oh{box-sizing:border-box;width:1040px;height:960px;padding:16px;background:#464642;border:8px ridge #62615a;color:#fff8df;font:9px Arial,sans-serif;position:relative;display:grid;grid-template-columns:294px 392px 294px;gap:6px}
 .b744-oh *{box-sizing:border-box}.b744-oh .oh-col{display:flex;flex-direction:column;gap:5px;min-width:0}
 .b744-oh .oh-section{position:relative;padding:12px 10px 8px;background:linear-gradient(110deg,#c5a16e,#bb9663);border:2px solid #796a53;border-radius:3px;box-shadow:inset 0 0 6px #574838;overflow:hidden;flex-shrink:0}
